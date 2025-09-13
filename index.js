@@ -20,10 +20,9 @@ app.use(
 );
 
 // ROUTES
-app.use("/", (req, res) => {
+app.get("/", (req, res) => {
   res.status(200).json({ success: true, message: "Welcome to Events Server" });
 });
-
 app.use("/api/auth", userRoutes);
 app.use("/api/event", eventRoutes);
 
@@ -32,7 +31,7 @@ app.use("/", (req, res) => {
   res.status(404).json({ success: false, message: "ROUTE NOT FOUND" });
 });
 
-const startServer = async (req, res) => {
+const startServer = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URL, { dbName: "EVENTS-DB" });
     app.listen(PORT, () => {
