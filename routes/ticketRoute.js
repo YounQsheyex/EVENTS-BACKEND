@@ -1,5 +1,5 @@
 const express = require("express");
-const router = express.Router();
+const ticketRouter = express.Router();
 
 // Import ticket controllers
 const {
@@ -19,10 +19,10 @@ const authMiddleware = require("../middleware/adminMiddleware.js");
 
 // ✅ Purchase a ticket
 // Requires user to be authenticated
-router.post("/", authMiddleware, purchaseTicket);
+ticketRouter.post("/", authMiddleware, purchaseTicket);
 
 // ✅ Delete a ticket
 // Requires user to be authenticated; owner or admin can delete
-router.delete("/:id", authMiddleware, deleteTicket);
+ticketRouter.delete("/:id", authMiddleware, deleteTicket);
 
-module.exports = router;
+module.exports = ticketRouter;
