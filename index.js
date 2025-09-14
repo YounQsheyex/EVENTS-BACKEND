@@ -7,6 +7,7 @@ const fileupload = require("express-fileupload");
 const cloudinary = require("cloudinary").v2;
 const userRoutes = require("./routes/userRoutes");
 const eventRoutes = require("./routes/eventRoutes");
+const ticketRouter = require("./routes/ticketRoute");
 const PORT = process.env.PORT || 5500;
 
 // middleware
@@ -26,6 +27,7 @@ app.use("/", (req, res) => {
 
 app.use("/api/auth", userRoutes);
 app.use("/api/event", eventRoutes);
+app.use("/api/ticket", ticketRouter);
 
 // error routes
 app.use("/", (req, res) => {
