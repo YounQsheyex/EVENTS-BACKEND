@@ -25,8 +25,16 @@ const userSchema = new Schema(
     },
     password: {
       type: String,
-      minlength: [6, "Minimum Password length is 6"],
-      required: [true, "Password is Required"],
+      required: function () {
+        // password required only if provider is not google
+        return this.provider !== "google";
+      },
+      minlength: [6, "Password must be at least 6 characters"],
+    },
+    provider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
     },
     role: {
       type: String,

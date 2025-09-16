@@ -8,10 +8,14 @@ const cloudinary = require("cloudinary").v2;
 const userRoutes = require("./routes/userRoutes");
 const eventRoutes = require("./routes/eventRoutes");
 const PORT = process.env.PORT || 5500;
+const passport = require("passport");
+require("./controllers/googleAuth");
+const googleRoutes = require("./routes/googleRoutes");
 
 // middleware
 app.use(express.json());
 app.use(cors());
+app.use(passport.initialize());
 app.use(
   fileupload({
     useTempFiles: true,
@@ -25,6 +29,7 @@ app.get("/", (req, res) => {
 });
 app.use("/api/auth", userRoutes);
 app.use("/api/event", eventRoutes);
+app.use("/auth", googleRoutes);
 
 // error routes
 app.use("/", (req, res) => {

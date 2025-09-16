@@ -128,7 +128,7 @@ const resetEmailTemplate = (firstname, clientUrl) => {
     >
       <img
         src="https://res.cloudinary.com/dgvucesc6/image/upload/Frame_2121455760_fj8zmx.png"
-          alt="Torii Gate"
+          alt="eventra"
         style="
           max-width: 700.3px;
           max-height: 43.92px;
