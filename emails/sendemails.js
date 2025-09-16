@@ -42,4 +42,5 @@ const sendResetEmail = async ({ firstname, clientUrl, email }) => {
     html,
   });
 };
+
 module.exports = { sendWelcomeEmail, sendResetEmail };
