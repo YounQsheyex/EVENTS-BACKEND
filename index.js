@@ -4,17 +4,33 @@ const app = express();
 const cors = require("cors");
 const mongoose = require("mongoose");
 const fileupload = require("express-fileupload");
+const passport = require("passport");
+const session = require("express-session");
+const PORT = process.env.PORT || 5500;
+
+require("./config/passport");
+
 const cloudinary = require("cloudinary").v2;
+
 const userRoutes = require("./routes/userRoutes");
 const eventRoutes = require("./routes/eventRoutes");
-const PORT = process.env.PORT || 5500;
-const passport = require("passport");
-require("./controllers/googleAuth");
 const googleRoutes = require("./routes/googleRoutes");
+
 
 // middleware
 app.use(express.json());
 app.use(cors());
+
+
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "secret",
+    resave: false,
+    saveUninitialized: false,
+  })
+);
+
+
 app.use(passport.initialize());
 app.use(
   fileupload({
@@ -22,6 +38,8 @@ app.use(
     limits: { fileSize: 10 * 1024 * 1024 },
   })
 );
+
+
 
 // ROUTES
 app.get("/", (req, res) => {
@@ -35,6 +53,7 @@ app.use("/auth", googleRoutes);
 app.use("/", (req, res) => {
   res.status(404).json({ success: false, message: "ROUTE NOT FOUND" });
 });
+
 
 const startServer = async () => {
   try {
