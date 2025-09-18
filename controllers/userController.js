@@ -1,3 +1,4 @@
+
 const USER = require("../models/usersSchema");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -247,3 +248,4 @@ module.exports = {
   handleForgotPassword,
   handleResetPassword,
 };
+
