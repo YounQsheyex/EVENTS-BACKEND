@@ -16,6 +16,7 @@
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.7.0",
     "cors": "^2.8.5",
+    "dayjs": "^1.11.18",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "express-fileupload": "^1.5.2",
