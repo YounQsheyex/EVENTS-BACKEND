@@ -51,9 +51,9 @@ app.get("/", (req, res) => {
   res.status(200).json({ success: true, message: "Welcome to Events Server" });
 });
 app.use("/api/auth", userRoutes);
-app.use("/api/event", eventRoutes);
+// make use of errorMiddleware as backup if ever any error occurs in any event route.
+app.use("/api/event", eventRoutes, errorMiddleware);
 app.use("/auth", googleRoutes);
-app.use(errorMiddleware); // make use of errorMiddleware as backup if ever any error occurs.
 
 // error routes
 app.use("/", (req, res) => {
