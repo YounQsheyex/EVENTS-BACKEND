@@ -16,11 +16,12 @@ const userRoutes = require("./routes/userRoutes");
 const eventRoutes = require("./routes/eventRoutes");
 const googleRoutes = require("./routes/googleRoutes");
 
+// Import Error middleware to handle errors throughout the API.
+const errorMiddleware = require("./middleware/error");
 
 // middleware
 app.use(express.json());
 app.use(cors());
-
 
 app.use(
   session({
@@ -30,7 +31,6 @@ app.use(
   })
 );
 
-
 app.use(passport.initialize());
 app.use(
   fileupload({
@@ -39,21 +39,26 @@ app.use(
   })
 );
 
-
+// Configuration for Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 // ROUTES
 app.get("/", (req, res) => {
   res.status(200).json({ success: true, message: "Welcome to Events Server" });
 });
 app.use("/api/auth", userRoutes);
-app.use("/api/event", eventRoutes);
+// make use of errorMiddleware as backup if ever any error occurs in any event route.
+app.use("/api/event", eventRoutes, errorMiddleware);
 app.use("/auth", googleRoutes);
 
 // error routes
 app.use("/", (req, res) => {
   res.status(404).json({ success: false, message: "ROUTE NOT FOUND" });
 });
-
 
 const startServer = async () => {
   try {
