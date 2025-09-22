@@ -3,16 +3,22 @@ const { default: mongoose } = require("mongoose");
 // Define the Event schema
 const eventSchema = new mongoose.Schema(
   {
-    // Event title
-    title: {
+    // Event name
+    name: {
       type: String,
-      required: [true, "Event title is required."],
+      required: [true, "Event name is required."],
     },
 
     // Event description
     description: {
       type: String,
       required: [true, "Event description is required."],
+    },
+
+    // Event highlights
+    highlight: {
+      type: String,
+      required: [true, "Event highlight is required."],
     },
 
     // Location of the event
