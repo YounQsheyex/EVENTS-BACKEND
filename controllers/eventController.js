@@ -48,6 +48,7 @@ const getAllEvents = async (req, res, next) => {
     res.status(200).json({
       success: true,
       events,
+      totalEvents: eventsCount,
     });
   } catch (error) {
     // Pass errors to error middleware
@@ -80,10 +81,13 @@ const getAllUpComingEvents = async (req, res, next) => {
         success: false,
         message: "No upcoming event found.",
         events: [],
+        totalUpcomingEvents: eventsCount,
       });
 
     // Success: return list of upcoming events
-    res.status(200).json({ success: true, events });
+    res
+      .status(200)
+      .json({ success: true, events, totalUpcomingEvents: eventsCount });
   } catch (error) {
     next(error);
   }
@@ -99,8 +103,9 @@ const createEvents = async (req, res, next) => {
   try {
     // Extract data from request body
     const {
-      title,
+      name,
       description,
+      highlight,
       location,
       eventDate,
       eventStart,
@@ -111,8 +116,9 @@ const createEvents = async (req, res, next) => {
 
     // Validate required fields
     if (
-      !title ||
+      !name ||
       !description ||
+      !highlight ||
       !location ||
       !eventDate ||
       !eventStart ||
@@ -168,8 +174,9 @@ const createEvents = async (req, res, next) => {
     const event = await EVENTS.create(
       [
         {
-          title,
+          name,
           description,
+          highlight,
           location,
           eventDate: dayjs.tz(eventDate, "Africa/Lagos").toDate(),
           eventStart: dayjs.tz(eventStart, "Africa/Lagos").toDate(),
@@ -272,17 +279,17 @@ const updateEvent = async (req, res, next) => {
       return body;
     }
 
-    // Update event by the event's ID and return only its title
+    // Update event by the event's ID and return only its name
     const event = await EVENTS.findByIdAndUpdate(req.params.id, refinedBody(), {
       new: true,
-    }).select("title -_id");
+    }).select("name -_id");
 
-    // Success message including updated fields and the updated event's title
+    // Success message including updated fields and the updated event's name
     res.status(200).json({
       success: true,
       message: `Successfully updated the ${Object.keys(req.body).join(
         ", "
-      )} of the ${event.title} event.`,
+      )} of the ${event.name} event.`,
     });
   } catch (error) {
     next(error);

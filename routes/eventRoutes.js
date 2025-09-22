@@ -10,7 +10,7 @@ const {
 } = require("../controllers/eventController");
 
 // Import middleware for checking admin authorization
-const { isAdmin } = require("../middleware/auth");
+const { isAdmin, isUser } = require("../middleware/auth");
 
 // Initialize an Express router instance
 const router = require("express").Router();
@@ -29,19 +29,19 @@ router.get("/filterby", filterEvent);
 
 // Route: POST /api/events/create
 // Create new event (admin only)
-router.post("/create", isAdmin, createEvents);
+router.post("/create", isUser, isAdmin, createEvents);
 
 // Route: POST /api/events/update/:id
 // Update event by ID (admin only)
-router.patch("/update/:id", isAdmin, updateEvent);
+router.patch("/update/:id", isUser, isAdmin, updateEvent);
 
 // Route: POST /api/events/cancel/:id
 // Cancel an event by ID (admin only)
-router.patch("/cancel/:id", isAdmin, cancelEvent);
+router.patch("/cancel/:id", isUser, isAdmin, cancelEvent);
 
 // Route: DELETE /api/events/delete/:id
 // Delete event by ID (admin only)
-router.delete("/delete/:id", isAdmin, deleteEvent);
+router.delete("/delete/:id", isUser, isAdmin, deleteEvent);
 
 // Export router so it can be used in server.js / app.js
 module.exports = router;
