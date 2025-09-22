@@ -52,7 +52,7 @@ app.get("/", (req, res) => {
 });
 app.use("/api/auth", userRoutes);
 // make use of errorMiddleware as backup if ever any error occurs in any event route.
-app.use("/api/event", eventRoutes, errorMiddleware);
+app.use("/api/events", eventRoutes, errorMiddleware);
 app.use("/auth", googleRoutes);
 
 // error routes
