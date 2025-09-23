@@ -1,37 +1,22 @@
-const express = require("express");
 const mongoose = require("mongoose");
 
-// Regular Ticket schema
-const regularTicketSchema = new mongoose.Schema({
+//  Ticket schema
+const TicketSchema = new mongoose.Schema({
     price: {
         type: Number,
-        required: true,
-        unique: true,
+        required: [true,"please ticket prices"],
+        unique: [true,"Please enter a unique ticket price"]
+    },
+    type:{
+        type:String,
+        enum:["regular", "vip", "vvip"],
+        required:[true, "select ticket type"]
+    },
+    eventId:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:"Events",
+        require:true
     }
 }, { timestamps: true });
 
-// VIP Ticket schema
-const vipTicketSchema = new mongoose.Schema({
-    price: {
-        type: Number,
-        required: true,
-        unique: true,
-    }
-}, { timestamps: true });
-
-// VVIP Ticket schema
-const vvipTicketSchema = new mongoose.Schema({
-    price: {
-        type: Number,
-        required: true,
-        unique: true,
-    }
-}, { timestamps: true });
-
-// Create models
-const RegularTicket = mongoose.model("RegularTicket", regularTicketSchema);
-const VipTicket = mongoose.model("VipTicket", vipTicketSchema);
-const VvipTicket = mongoose.model("VvipTicket", vvipTicketSchema);
-
-// Export models
-module.exports = { RegularTicket, VipTicket, VvipTicket };
+module.exports = TicketSchema;
