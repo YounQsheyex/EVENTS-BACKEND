@@ -14,6 +14,7 @@ const cloudinary = require("cloudinary").v2;
 
 const userRoutes = require("./routes/userRoutes");
 const eventRoutes = require("./routes/eventRoutes");
+const ticketRoutes = require("./routes/ticketRoutes");
 const googleRoutes = require("./routes/googleRoutes");
 
 // Import Error middleware to handle errors throughout the API.
@@ -52,7 +53,8 @@ app.get("/", (req, res) => {
 });
 app.use("/api/auth", userRoutes);
 // make use of errorMiddleware as backup if ever any error occurs in any event route.
-app.use("/api/events", eventRoutes, errorMiddleware);
+app.use("/api/events",eventRoutes, errorMiddleware);
+app.use("/ticket",ticketRoutes, errorMiddleware);
 app.use("/auth", googleRoutes);
 
 // error routes

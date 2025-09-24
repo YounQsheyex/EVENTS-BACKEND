@@ -4,8 +4,7 @@ const mongoose = require("mongoose");
 const TicketSchema = new mongoose.Schema({
     price: {
         type: Number,
-        required: [true,"please ticket prices"],
-        unique: [true,"Please enter a unique ticket price"]
+        required: [true,"please enter ticket prices"],
     },
     type:{
         type:String,
@@ -15,8 +14,9 @@ const TicketSchema = new mongoose.Schema({
     eventId:{
         type:mongoose.Schema.Types.ObjectId,
         ref:"Events",
-        require:true
+        required:[true,"Please provide the eventId"],
+        unique:true
     }
 }, { timestamps: true });
 
-module.exports = TicketSchema;
+module.exports = mongoose.model("ticket", TicketSchema);
