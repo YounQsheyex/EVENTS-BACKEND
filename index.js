@@ -18,6 +18,8 @@ const googleRoutes = require("./routes/googleRoutes");
 
 // Import Error middleware to handle errors throughout the API.
 const errorMiddleware = require("./middleware/error");
+// Import arcjet middleware to handle rate limiting throughout the API.
+const arcjetMiddleware = require("./middleware/arjectMiddleware");
 
 // middleware
 app.use(express.json());
@@ -45,6 +47,9 @@ cloudinary.config({
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+
+// Arcjet rate limiter to prevent users from spamming the server by allowing a limited number of requests to be made by a user within a given time
+app.use(arcjetMiddleware);
 
 // ROUTES
 app.get("/", (req, res) => {

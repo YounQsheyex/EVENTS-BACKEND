@@ -93,9 +93,6 @@ const eventSchema = new mongoose.Schema(
     toJSON: {
       virtuals: true, //include virtual fields
       transform: function (doc, ret) {
-        // Replace `_id` with `id`
-        ret.id = ret._id;
-
         // Keep raw Date values (useful for frontend logic & sorting)
         const rawEventDate = ret.eventDate;
         const rawEventStart = ret.eventStart;
@@ -124,8 +121,6 @@ const eventSchema = new mongoose.Schema(
           });
         }
 
-        // Clean up MongoDB internal fields
-        delete ret._id;
         // Remove `__v` (mongoose version key)
         delete ret.__v;
       },
