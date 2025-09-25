@@ -11,21 +11,22 @@ const {
 
 // Import middleware for checking admin authorization
 const { isAdmin, isUser } = require("../middleware/auth");
+const cache = require("../middleware/redisMiddleware");
 
 // Initialize an Express router instance
 const router = require("express").Router();
 
 // Route: GET /api/events
-// Fetch all events
-router.get("/", getAllEvents);
+// Fetch all events and cache the response
+router.get("/", cache("All events: "), getAllEvents);
 
 // Route: GET /api/events/upcoming?page=pageNumber
-// Fetch events with category = "upcoming"
-router.get("/upcoming", getAllUpComingEvents);
+// Fetch events with category = "upcoming" and cache the response with key "All upcoming events: params or query"
+router.get("/upcoming", cache("All upcoming events: "), getAllUpComingEvents);
 
 // Route: GET /api/events/filterby?field=value
-// Filter events by query (e.g. ?location=Lagos)
-router.get("/filterby", filterEvent);
+// Filter events by query (e.g. ?location=Lagos) and cache the response with key "Filter event: params or query"
+router.get("/filterby", cache("Filter event: "), filterEvent);
 
 // Route: POST /api/events/create
 // Create new event (admin only)
