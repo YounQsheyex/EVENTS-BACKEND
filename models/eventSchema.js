@@ -1,5 +1,18 @@
 const { default: mongoose } = require("mongoose");
 
+const eventTicketTypes = new mongoose.Schema({
+  type: {
+    type: String,
+    enum: ["Regular", "VIP", "VVIP"],
+    required: [true, "Event Ticket type is required."],
+  },
+  price: {
+    type: Number,
+    required: [true, "Event price is required."],
+    min: 0,
+  },
+});
+
 // Define the Event schema
 const eventSchema = new mongoose.Schema(
   {
@@ -84,6 +97,8 @@ const eventSchema = new mongoose.Schema(
       enum: ["upcoming", "ongoing", "completed", "cancelled"],
       default: "upcoming",
     },
+
+    ticketTypes: [eventTicketTypes],
   },
   {
     // Add createdAt & updatedAt timestamps

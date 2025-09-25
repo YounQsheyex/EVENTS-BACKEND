@@ -13,6 +13,7 @@ const utc = require("dayjs/plugin/utc");
 
 // Import Event model (MongoDB schema for events)
 const EVENTS = require("../models/eventSchema");
+const redisConfig = require("../helpers/redis");
 
 // Import Cloudinary for image uploads
 const cloudinary = require("cloudinary").v2;
@@ -112,7 +113,16 @@ const createEvents = async (req, res, next) => {
       eventEnd,
       price,
       category,
+      ticketTypes,
     } = req.body;
+
+    let ticketTypesJson = {};
+
+    if (typeof ticketTypes === "string") {
+      ticketTypesJson = JSON.parse(ticketTypes);
+    }
+    console.log(ticketTypes);
+    await redisConfig.flushall("ASYNC");
 
     // Validate required fields
     if (
@@ -124,7 +134,8 @@ const createEvents = async (req, res, next) => {
       !eventStart ||
       !eventEnd ||
       !price ||
-      !category
+      !category ||
+      !ticketTypesJson.length
     )
       return res.status(400).json({
         success: false,
@@ -184,6 +195,7 @@ const createEvents = async (req, res, next) => {
           eventImage: uploadImage.secure_url, // Store Cloudinary image URL
           price,
           category,
+          ticketTypes: ticketTypesJson,
         },
       ],
       { session }
