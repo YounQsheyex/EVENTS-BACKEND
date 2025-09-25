@@ -1,5 +1,5 @@
 const createWelcomeEmail = (firstname) => {
-    return `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -84,8 +84,8 @@ const createWelcomeEmail = (firstname) => {
 `;
 };
 
-const resetEmailTemplate = (firstname) => {
-    return `<!DOCTYPE html>
+const resetEmailTemplate = (firstname, clientUrl) => {
+  return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
