@@ -13,8 +13,12 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+
     "@arcjet/inspect": "^1.0.0-beta.12",
     "@arcjet/node": "^1.0.0-beta.12",
+
+    "@sendgrid/mail": "^8.1.6",
+
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.7.0",
     "cors": "^2.8.5",
