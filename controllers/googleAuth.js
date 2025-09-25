@@ -135,12 +135,10 @@ const finalizeGoogle = async (req, res) => {
       user,
     });
   } catch (error) {
-    res
-      .status(400)
-      .json({
-        message: "Error finalizing Google sign-in",
-        error: error.message,
-      });
+    res.status(400).json({
+      message: "Error finalizing Google sign-in",
+      error: error.message,
+    });
   }
 };
 
