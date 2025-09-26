@@ -99,6 +99,11 @@ const eventSchema = new mongoose.Schema(
     },
 
     ticketTypes: [eventTicketTypes],
+
+    coordinates: {
+      type: Array,
+      default: [6.4716092, 3.0684469],
+    },
   },
   {
     // Add createdAt & updatedAt timestamps

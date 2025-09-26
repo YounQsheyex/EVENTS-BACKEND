@@ -14,6 +14,7 @@ const utc = require("dayjs/plugin/utc");
 // Import Event model (MongoDB schema for events)
 const EVENTS = require("../models/eventSchema");
 const redisConfig = require("../helpers/redis");
+const geocodeLocation = require("../helpers/locator");
 
 // Import Cloudinary for image uploads
 const cloudinary = require("cloudinary").v2;
@@ -27,15 +28,15 @@ dayjs.extend(tz);
    ======================== */
 const getAllEvents = async (req, res, next) => {
   try {
-    const { page } = req.query; // Get current page from query
-    const pg = parseInt(page, 10) || 1; // default to 1
+    const { page, limit } = req.query; // Get current page from query
+    const pg = parseInt(page, 100) || 1; // default to 1
 
     // total count (for info / frontend)
     const eventsCount = await EVENTS.countDocuments();
-    const limit = 3; // items per page
-    const skip = (pg - 1) * limit; // how many to skip
+    const lmt = parseInt(limit, 10) || 5; // items per page default to 5
+    const skip = (pg - 1) * lmt; // how many to skip
 
-    const events = await EVENTS.find({}).skip(skip).limit(limit).lean();
+    const events = await EVENTS.find({}).skip(skip).limit(lmt).lean();
 
     // If no events, return 404
     if (!events.length)
@@ -121,7 +122,6 @@ const createEvents = async (req, res, next) => {
     if (typeof ticketTypes === "string") {
       ticketTypesJson = JSON.parse(ticketTypes);
     }
-    console.log(ticketTypes);
     await redisConfig.flushall("ASYNC");
 
     // Validate required fields
@@ -164,6 +164,9 @@ const createEvents = async (req, res, next) => {
         .status(400)
         .json({ success: false, message: "Event already exists." });
 
+    // Event locus for map positions on the frontend map.
+    const eventlocus = await geocodeLocation(location);
+
     // Upload image to Cloudinary
     const uploadImage = await cloudinary.uploader.upload(
       req.files.file.tempFilePath,
@@ -196,6 +199,7 @@ const createEvents = async (req, res, next) => {
           price,
           category,
           ticketTypes: ticketTypesJson,
+          coordinates: eventlocus,
         },
       ],
       { session }
@@ -283,10 +287,12 @@ const updateEvent = async (req, res, next) => {
         .status(400)
         .json({ success: false, message: "Content to update is not provided" });
 
-    // Refine update body to ensure price is stored in DB as a number
-    function refinedBody(body = req.body) {
+    // Refine update body to ensure price is stored in DB as a number and event coordinates are generated
+    async function refinedBody(body = req.body) {
       if (body.hasOwnProperty("price")) {
         body["price"] = Number(body["price"]);
+      } else if (body.hasOwnProperty("location")) {
+        body["coordinates"] = await geocodeLocation(body["location"]);
       }
       return body;
     }
