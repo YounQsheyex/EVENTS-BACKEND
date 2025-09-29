@@ -33,7 +33,7 @@ const getAllEvents = async (req, res, next) => {
 
     // total count (for info / frontend)
     const eventsCount = await EVENTS.countDocuments();
-    const lmt = parseInt(limit) || 5; // items per page default to 5
+    const lmt = parseInt(limit) || 6; // items per page default to 5
     const skip = (pg - 1) * lmt; // how many to skip
 
     const events = await EVENTS.find({}).skip(skip).limit(lmt).lean();
@@ -67,7 +67,7 @@ const getAllUpComingEvents = async (req, res, next) => {
   try {
     const { page, limit } = req.query; // Get current page from query
     const pg = parseInt(page) || 1; // default to 1
-    const lmt = parseInt(limit) || 5; // items per page default to 5
+    const lmt = parseInt(limit) || 8; // items per page default to 5
 
     const skip = (pg - 1) * lmt; // how many to skip
     const events = await EVENTS.find({ status: "upcoming" })
@@ -299,8 +299,18 @@ const updateEvent = async (req, res, next) => {
         body.price = Number(body.price);
       }
 
+      if (body.coordinates) {
+        body.coordinates = body.coordinates.split(", ");
+      }
+
       if (body.location) {
-        body.coordinates = await geocodeLocation(body.location);
+        const locate = await geocodeLocation(body.location);
+        if (!locate && !body.coordinates.length)
+          return res.status(400).json({
+            success: false,
+            message:
+              "Please Provide the coordinates of this suggested location.",
+          });
       }
 
       if (req.files?.file) {

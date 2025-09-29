@@ -31,7 +31,7 @@ const geocodeLocation = async (location) => {
   const data = await response.json();
 
   // If no results are found, throw an error to handle upstream
-  if (!data.length) throw new Error("Unable to geocode location");
+  if (!data.length) return false;
 
   // [latitude, longitude] as floating-point numbers
   const coords = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
