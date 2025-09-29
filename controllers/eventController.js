@@ -302,6 +302,14 @@ const updateEvent = async (req, res, next) => {
       new: true,
     }).select("title -_id");
 
+    if (!event)
+      return res.status(404).json({
+        success: false,
+        message: "Event not found!",
+      });
+
+    await redisConfig.flushall("ASYNC");
+
     // Success message including updated fields and the updated event's name
     res.status(200).json({
       success: true,
@@ -327,7 +335,17 @@ const cancelEvent = async (req, res, next) => {
       });
 
     // Update event status to cancelled
-    await EVENTS.findByIdAndUpdate(req.params.id, { status: "cancelled" });
+    const event = await EVENTS.findByIdAndUpdate(req.params.id, {
+      status: "cancelled",
+    });
+
+    if (!event)
+      return res.status(404).json({
+        success: false,
+        message: "Event not found!",
+      });
+
+    await redisConfig.flushall("ASYNC");
 
     res
       .status(200)
@@ -350,7 +368,15 @@ const deleteEvent = async (req, res, next) => {
       });
 
     // Permanently delete event
-    await EVENTS.findByIdAndDelete(req.params.id);
+    const event = await EVENTS.findByIdAndDelete(req.params.id);
+
+    if (!event)
+      return res.status(404).json({
+        success: false,
+        message: "Event not found!",
+      });
+
+    await redisConfig.flushall("ASYNC");
 
     res
       .status(200)
