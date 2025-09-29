@@ -14,7 +14,7 @@ const utc = require("dayjs/plugin/utc");
 // Import Event model (MongoDB schema for events)
 const EVENTS = require("../models/eventSchema");
 const redisConfig = require("../helpers/redis");
-const geocodeLocation = require("../helpers/locator");
+const geocodeLocation = require("../helpers/locator.js");
 
 // Import Cloudinary for image uploads
 const cloudinary = require("cloudinary").v2;
@@ -29,11 +29,11 @@ dayjs.extend(tz);
 const getAllEvents = async (req, res, next) => {
   try {
     const { page, limit } = req.query; // Get current page from query
-    const pg = parseInt(page, 100) || 1; // default to 1
+    const pg = parseInt(page) || 1; // default to 1
 
     // total count (for info / frontend)
     const eventsCount = await EVENTS.countDocuments();
-    const lmt = parseInt(limit, 10) || 5; // items per page default to 5
+    const lmt = parseInt(limit) || 5; // items per page default to 5
     const skip = (pg - 1) * lmt; // how many to skip
 
     const events = await EVENTS.find({}).skip(skip).limit(lmt).lean();
@@ -65,16 +65,16 @@ const getAllUpComingEvents = async (req, res, next) => {
   // Count events that belong to "upcoming" status
   const eventsCount = await EVENTS.countDocuments({ status: "upcoming" });
   try {
-    const { page } = req.query; // Get current page from query
-    const pg = parseInt(page, 10) || 1; // default to 1
+    const { page, limit } = req.query; // Get current page from query
+    const pg = parseInt(page) || 1; // default to 1
+    const lmt = parseInt(limit) || 5; // items per page default to 5
 
-    const limit = 3; // items per page
-    const skip = (pg - 1) * limit; // how many to skip
+    const skip = (pg - 1) * lmt; // how many to skip
     const events = await EVENTS.find({ status: "upcoming" })
       // Skip logic for pagination
       .skip(skip)
       // Show only 6 per page
-      .limit(limit)
+      .limit(lmt)
       .lean();
 
     // If no upcoming events, return 404
@@ -105,7 +105,7 @@ const createEvents = async (req, res, next) => {
   try {
     // Extract data from request body
     const {
-      name,
+      title,
       description,
       highlight,
       location,
@@ -126,7 +126,7 @@ const createEvents = async (req, res, next) => {
 
     // Validate required fields
     if (
-      !name ||
+      !title ||
       !description ||
       !highlight ||
       !location ||
@@ -188,7 +188,7 @@ const createEvents = async (req, res, next) => {
     const event = await EVENTS.create(
       [
         {
-          name,
+          title,
           description,
           highlight,
           location,
@@ -300,7 +300,7 @@ const updateEvent = async (req, res, next) => {
     // Update event by the event's ID and return only its name
     const event = await EVENTS.findByIdAndUpdate(req.params.id, refinedBody(), {
       new: true,
-    }).select("name -_id");
+    }).select("title -_id");
 
     // Success message including updated fields and the updated event's name
     res.status(200).json({

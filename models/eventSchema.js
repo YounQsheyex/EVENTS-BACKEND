@@ -16,10 +16,10 @@ const eventTicketTypes = new mongoose.Schema({
 // Define the Event schema
 const eventSchema = new mongoose.Schema(
   {
-    // Event name
-    name: {
+    // Event title
+    title: {
       type: String,
-      required: [true, "Event name is required."],
+      required: [true, "Event title is required."],
     },
 
     // Event description
