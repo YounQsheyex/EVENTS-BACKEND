@@ -282,25 +282,53 @@ const filterEvent = async (req, res, next) => {
 const updateEvent = async (req, res, next) => {
   try {
     // Ensure request body is not empty
-    if (!req.body)
+    if (!req.body && !req.files)
       return res
         .status(400)
         .json({ success: false, message: "Content to update is not provided" });
 
     // Refine update body to ensure price is stored in DB as a number and event coordinates are generated
-    async function refinedBody(body = req.body) {
+    async function refinedBody(req) {
+      const body = req.body || {};
+
       if (body.hasOwnProperty("price")) {
         body["price"] = Number(body["price"]);
-      } else if (body.hasOwnProperty("location")) {
+      }
+
+      if (body.hasOwnProperty("location")) {
         body["coordinates"] = await geocodeLocation(body["location"]);
+      }
+
+      if (req.hasOwnProperty("files")) {
+        // Ensure event image is uploaded
+        if (!req.files.file.tempFilePath)
+          return res
+            .status(400)
+            .json({ success: false, message: "Event image is required." });
+
+        // Upload image to Cloudinary
+        const uploadImage = await cloudinary.uploader.upload(
+          req.files.file.tempFilePath,
+          {
+            folder: "Eventra/events",
+            unique_filename: false,
+            use_filename: true,
+          }
+        );
+
+        body["eventImage"] = uploadImage.secure_url;
       }
       return body;
     }
 
     // Update event by the event's ID and return only its name
-    const event = await EVENTS.findByIdAndUpdate(req.params.id, refinedBody(), {
-      new: true,
-    }).select("title -_id");
+    const event = await EVENTS.findByIdAndUpdate(
+      req.params.id,
+      refinedBody(req),
+      {
+        new: true,
+      }
+    ).select("title -_id");
 
     if (!event)
       return res.status(404).json({
@@ -313,7 +341,7 @@ const updateEvent = async (req, res, next) => {
     // Success message including updated fields and the updated event's name
     res.status(200).json({
       success: true,
-      message: `Successfully updated the ${Object.keys(req.body).join(
+      message: `Successfully updated the ${Object.keys(refinedBody(req)).join(
         ", "
       )} of the ${event.name} event.`,
     });
