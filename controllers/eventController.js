@@ -281,32 +281,35 @@ const filterEvent = async (req, res, next) => {
    ======================== */
 const updateEvent = async (req, res, next) => {
   try {
-    // Ensure request body is not empty
-    if (!req.body && !req.files)
+    // Check for empty body/files
+    if (
+      (!req.body || Object.keys(req.body).length === 0) &&
+      (!req.files || Object.keys(req.files).length === 0)
+    ) {
       return res
         .status(400)
         .json({ success: false, message: "Content to update is not provided" });
+    }
 
-    // Refine update body to ensure price is stored in DB as a number and event coordinates are generated
-    async function refinedBody(req) {
-      const body = req.body || {};
+    // Refine update body
+    const refinedBody = async () => {
+      const body = { ...req.body };
 
-      if (body.hasOwnProperty("price")) {
-        body["price"] = Number(body["price"]);
+      if (body.price !== undefined) {
+        body.price = Number(body.price);
       }
 
-      if (body.hasOwnProperty("location")) {
-        body["coordinates"] = await geocodeLocation(body["location"]);
+      if (body.location) {
+        body.coordinates = await geocodeLocation(body.location);
       }
 
-      if (req.hasOwnProperty("files")) {
-        // Ensure event image is uploaded
-        if (!req.files.file.tempFilePath)
+      if (req.files?.file) {
+        if (!req.files.file.tempFilePath) {
           return res
             .status(400)
             .json({ success: false, message: "Event image is required." });
+        }
 
-        // Upload image to Cloudinary
         const uploadImage = await cloudinary.uploader.upload(
           req.files.file.tempFilePath,
           {
@@ -316,34 +319,34 @@ const updateEvent = async (req, res, next) => {
           }
         );
 
-        body["eventImage"] = uploadImage.secure_url;
+        body.eventImage = uploadImage.secure_url;
       }
+
       return body;
-    }
+    };
 
-    // Update event by the event's ID and return only its name
-    const event = await EVENTS.findByIdAndUpdate(
-      req.params.id,
-      refinedBody(req),
-      {
-        new: true,
-      }
-    ).select("title -_id");
+    const refined = await refinedBody();
 
-    if (!event)
+    // Update event and return only its title
+    const event = await EVENTS.findByIdAndUpdate(req.params.id, refined, {
+      new: true,
+    }).select("title -_id");
+
+    if (!event) {
       return res.status(404).json({
         success: false,
         message: "Event not found!",
       });
+    }
 
+    // Caution: this clears *all* Redis keys
     await redisConfig.flushall("ASYNC");
 
-    // Success message including updated fields and the updated event's name
     res.status(200).json({
       success: true,
-      message: `Successfully updated the ${Object.keys(refinedBody(req)).join(
+      message: `Successfully updated ${Object.keys(refined).join(
         ", "
-      )} of the ${event.name} event.`,
+      )} of the ${event.title} event.`,
     });
   } catch (error) {
     next(error);
