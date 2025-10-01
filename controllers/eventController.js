@@ -241,6 +241,14 @@ const filterEvent = async (req, res, next) => {
         filterObj["price"] = query[filter] === "paid" ? { $gte: 1 } : 0;
       } else if (filter === "date") {
         filterObj["eventDate"] = new Date(query[filter]);
+      } else if (
+        Object.keys(query).includes("end") &&
+        Object.keys(query).includes("start")
+      ) {
+        filterObj["eventDate"] = {
+          $lte: new Date(query["end"]).toISOString(),
+          $gte: new Date(query["start"]).toISOString(),
+        };
       } else if (filter === "start") {
         filterObj["eventDate"] = {
           $gte: new Date(query[filter]).toISOString(),
