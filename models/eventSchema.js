@@ -1,12 +1,25 @@
 const { default: mongoose } = require("mongoose");
 
+const eventTicketTypes = new mongoose.Schema({
+  type: {
+    type: String,
+    enum: ["Regular", "VIP", "VVIP"],
+    required: [true, "Event Ticket type is required."],
+  },
+  price: {
+    type: Number,
+    required: [true, "Event price is required."],
+    min: 0,
+  },
+});
+
 // Define the Event schema
 const eventSchema = new mongoose.Schema(
   {
-    // Event name
-    name: {
+    // Event title
+    title: {
       type: String,
-      required: [true, "Event name is required."],
+      required: [true, "Event title is required."],
     },
 
     // Event description
@@ -83,6 +96,13 @@ const eventSchema = new mongoose.Schema(
       type: String,
       enum: ["upcoming", "ongoing", "completed", "cancelled"],
       default: "upcoming",
+    },
+
+    ticketTypes: [eventTicketTypes],
+
+    coordinates: {
+      type: Array,
+      default: [6.4716092, 3.0684469],
     },
   },
   {
