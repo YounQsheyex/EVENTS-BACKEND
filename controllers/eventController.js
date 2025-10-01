@@ -184,26 +184,26 @@ const createEvents = async (req, res, next) => {
     // `.toDate()` converts it into a native JavaScript Date object
     // eventDate = dayjs.tz("2025-09-21 15:15", "Africa/Lagos").toDate();
 
+    const eventObj = {
+      title,
+      description,
+      highlight,
+      location,
+      eventDate: dayjs.tz(eventDate, "Africa/Lagos").toDate(),
+      eventStart: dayjs.tz(eventStart, "Africa/Lagos").toDate(),
+      eventEnd: dayjs.tz(eventEnd, "Africa/Lagos").toDate(),
+      eventImage: uploadImage.secure_url, // Store Cloudinary image URL
+      price,
+      category,
+      ticketTypes: ticketTypesJson,
+    };
+
+    if (eventlocus) {
+      eventObj["coordinates"] = eventlocus;
+    }
+
     // Create new event document inside a transaction
-    const event = await EVENTS.create(
-      [
-        {
-          title,
-          description,
-          highlight,
-          location,
-          eventDate: dayjs.tz(eventDate, "Africa/Lagos").toDate(),
-          eventStart: dayjs.tz(eventStart, "Africa/Lagos").toDate(),
-          eventEnd: dayjs.tz(eventEnd, "Africa/Lagos").toDate(),
-          eventImage: uploadImage.secure_url, // Store Cloudinary image URL
-          price,
-          category,
-          ticketTypes: ticketTypesJson,
-          coordinates: eventlocus,
-        },
-      ],
-      { session }
-    );
+    const event = await EVENTS.create([eventObj], { session });
 
     // Commit transaction (make changes permanent)
     await session.commitTransaction();
@@ -227,46 +227,48 @@ const createEvents = async (req, res, next) => {
    ======================== */
 const filterEvent = async (req, res, next) => {
   try {
-    let feedback = {}; // Object to store filter details for user messages
+    let filterObj = {},
+      query = req.query;
 
     // Function to refine incoming query params
-    function filterBy(query) {
-      for (const q in query) {
-        feedback["filterBy"] = q;
-        feedback["search"] = query[q];
-
-        switch (query[q]) {
-          // Handle URL-encoded spaces (%20)
-          case query[q].includes("%20"):
-            query[q] = query[q].replaceAll("%20", " ");
-            return query;
-
-          // Handle plus signs (+) as spaces
-          case query[q].includes("+"):
-            query[q] = query[q].replaceAll("+", " ");
-            return query;
-
-          // Convert numeric type DB schema fields to numbers
-          case q === "price":
-            query[q] = Number(query[q]);
-            return query;
-
-          default:
-            return query;
-        }
+    for (const filter in query) {
+      if (["title", "location", "category", "status"].includes(filter)) {
+        query[filter] = query[filter]
+          .replaceAll("%20", " ")
+          .replaceAll("+", " ");
+        filterObj[filter] = query[filter];
+      } else if (filter === "price") {
+        filterObj["price"] = query[filter] === "paid" ? { $gte: 1 } : 0;
+      } else if (filter === "date") {
+        filterObj["eventDate"] = new Date(query[filter]);
+      } else if (filter === "start") {
+        filterObj["eventDate"] = {
+          $gte: new Date(query[filter]).toISOString(),
+        };
+      } else if (filter === "end") {
+        filterObj["eventDate"] = {
+          $lte: new Date(query[filter]).toISOString(),
+        };
       }
     }
 
+    console.log(filterObj.price);
+
     // Fetch events based on processed query
-    let events = await EVENTS.find(filterBy(req.query));
+    let events = await EVENTS.find(filterObj)
+      .sort("asc")
+      .skip((query.page ? query.page - 1 : 0) * 8)
+      .limit(8);
 
     // If none found, send descriptive message
     if (!events.length)
       return res.status(404).json({
         success: false,
-        message: `No event with ${feedback["filterBy"]} given as ${
-          feedback["filterBy"] === "price" ? "$" : ""
-        }${feedback["search"] ? feedback["search"] : "empty"} was found.`,
+        message: `No event with ${Object.keys(filterObj).join()} given as ${
+          Object.keys(filterObj).includes("price") ? "$" : ""
+        }${
+          Object.values(filterObj) ? Object.values(filterObj) : "empty"
+        } was found.`,
       });
 
     // Success
@@ -299,7 +301,7 @@ const updateEvent = async (req, res, next) => {
         body.price = Number(body.price);
       }
 
-      if (body.coordinates) {
+      if (typeof body.coordinates === "string") {
         body.coordinates = body.coordinates.split(", ");
       }
 
