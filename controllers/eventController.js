@@ -252,8 +252,6 @@ const filterEvent = async (req, res, next) => {
       }
     }
 
-    console.log(filterObj.price);
-
     // Fetch events based on processed query
     let events = await EVENTS.find(filterObj)
       .sort("asc")
