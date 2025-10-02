@@ -13,6 +13,8 @@ const utc = require("dayjs/plugin/utc");
 
 // Import Event model (MongoDB schema for events)
 const EVENTS = require("../models/eventSchema");
+const redisConfig = require("../helpers/redis");
+const geocodeLocation = require("../helpers/locator.js");
 
 // Import Cloudinary for image uploads
 const cloudinary = require("cloudinary").v2;
@@ -26,15 +28,15 @@ dayjs.extend(tz);
    ======================== */
 const getAllEvents = async (req, res, next) => {
   try {
-    const { page } = req.query; // Get current page from query
-    const pg = parseInt(page, 10) || 1; // default to 1
+    const { page, limit } = req.query; // Get current page from query
+    const pg = parseInt(page) || 1; // default to 1
 
     // total count (for info / frontend)
     const eventsCount = await EVENTS.countDocuments();
-    const limit = 3; // items per page
-    const skip = (pg - 1) * limit; // how many to skip
+    const lmt = parseInt(limit) || 6; // items per page default to 5
+    const skip = (pg - 1) * lmt; // how many to skip
 
-    const events = await EVENTS.find({}).skip(skip).limit(limit).lean();
+    const events = await EVENTS.find({}).skip(skip).limit(lmt).lean();
 
     // If no events, return 404
     if (!events.length)
@@ -63,16 +65,16 @@ const getAllUpComingEvents = async (req, res, next) => {
   // Count events that belong to "upcoming" status
   const eventsCount = await EVENTS.countDocuments({ status: "upcoming" });
   try {
-    const { page } = req.query; // Get current page from query
-    const pg = parseInt(page, 10) || 1; // default to 1
+    const { page, limit } = req.query; // Get current page from query
+    const pg = parseInt(page) || 1; // default to 1
+    const lmt = parseInt(limit) || 8; // items per page default to 5
 
-    const limit = 3; // items per page
-    const skip = (pg - 1) * limit; // how many to skip
+    const skip = (pg - 1) * lmt; // how many to skip
     const events = await EVENTS.find({ status: "upcoming" })
       // Skip logic for pagination
       .skip(skip)
       // Show only 6 per page
-      .limit(limit)
+      .limit(lmt)
       .lean();
 
     // If no upcoming events, return 404
@@ -103,7 +105,7 @@ const createEvents = async (req, res, next) => {
   try {
     // Extract data from request body
     const {
-      name,
+      title,
       description,
       highlight,
       location,
@@ -112,11 +114,19 @@ const createEvents = async (req, res, next) => {
       eventEnd,
       price,
       category,
+      ticketTypes,
     } = req.body;
+
+    let ticketTypesJson = {};
+
+    if (typeof ticketTypes === "string") {
+      ticketTypesJson = JSON.parse(ticketTypes);
+    }
+    await redisConfig.flushall("ASYNC");
 
     // Validate required fields
     if (
-      !name ||
+      !title ||
       !description ||
       !highlight ||
       !location ||
@@ -124,7 +134,8 @@ const createEvents = async (req, res, next) => {
       !eventStart ||
       !eventEnd ||
       !price ||
-      !category
+      !category ||
+      !ticketTypesJson.length
     )
       return res.status(400).json({
         success: false,
@@ -153,6 +164,9 @@ const createEvents = async (req, res, next) => {
         .status(400)
         .json({ success: false, message: "Event already exists." });
 
+    // Event locus for map positions on the frontend map.
+    const eventlocus = await geocodeLocation(location);
+
     // Upload image to Cloudinary
     const uploadImage = await cloudinary.uploader.upload(
       req.files.file.tempFilePath,
@@ -170,24 +184,26 @@ const createEvents = async (req, res, next) => {
     // `.toDate()` converts it into a native JavaScript Date object
     // eventDate = dayjs.tz("2025-09-21 15:15", "Africa/Lagos").toDate();
 
+    const eventObj = {
+      title,
+      description,
+      highlight,
+      location,
+      eventDate: dayjs.tz(eventDate, "Africa/Lagos").toDate(),
+      eventStart: dayjs.tz(eventStart, "Africa/Lagos").toDate(),
+      eventEnd: dayjs.tz(eventEnd, "Africa/Lagos").toDate(),
+      eventImage: uploadImage.secure_url, // Store Cloudinary image URL
+      price,
+      category,
+      ticketTypes: ticketTypesJson,
+    };
+
+    if (eventlocus) {
+      eventObj["coordinates"] = eventlocus;
+    }
+
     // Create new event document inside a transaction
-    const event = await EVENTS.create(
-      [
-        {
-          name,
-          description,
-          highlight,
-          location,
-          eventDate: dayjs.tz(eventDate, "Africa/Lagos").toDate(),
-          eventStart: dayjs.tz(eventStart, "Africa/Lagos").toDate(),
-          eventEnd: dayjs.tz(eventEnd, "Africa/Lagos").toDate(),
-          eventImage: uploadImage.secure_url, // Store Cloudinary image URL
-          price,
-          category,
-        },
-      ],
-      { session }
-    );
+    const event = await EVENTS.create([eventObj], { session });
 
     // Commit transaction (make changes permanent)
     await session.commitTransaction();
@@ -211,46 +227,46 @@ const createEvents = async (req, res, next) => {
    ======================== */
 const filterEvent = async (req, res, next) => {
   try {
-    let feedback = {}; // Object to store filter details for user messages
+    let filterObj = {},
+      query = req.query;
 
     // Function to refine incoming query params
-    function filterBy(query) {
-      for (const q in query) {
-        feedback["filterBy"] = q;
-        feedback["search"] = query[q];
-
-        switch (query[q]) {
-          // Handle URL-encoded spaces (%20)
-          case query[q].includes("%20"):
-            query[q] = query[q].replaceAll("%20", " ");
-            return query;
-
-          // Handle plus signs (+) as spaces
-          case query[q].includes("+"):
-            query[q] = query[q].replaceAll("+", " ");
-            return query;
-
-          // Convert numeric type DB schema fields to numbers
-          case q === "price":
-            query[q] = Number(query[q]);
-            return query;
-
-          default:
-            return query;
-        }
+    for (const filter in query) {
+      if (["title", "location", "category", "status"].includes(filter)) {
+        query[filter] = query[filter]
+          .replaceAll("%20", " ")
+          .replaceAll("+", " ");
+        filterObj[filter] = query[filter];
+      } else if (filter === "price") {
+        filterObj["price"] = query[filter] === "paid" ? { $gte: 1 } : 0;
+      } else if (filter === "date") {
+        filterObj["eventDate"] = new Date(query[filter]);
+      } else if (filter === "start") {
+        filterObj["eventDate"] = {
+          $gte: new Date(query[filter]).toISOString(),
+        };
+      } else if (filter === "end") {
+        filterObj["eventDate"] = {
+          $lte: new Date(query[filter]).toISOString(),
+        };
       }
     }
 
     // Fetch events based on processed query
-    let events = await EVENTS.find(filterBy(req.query));
+    let events = await EVENTS.find(filterObj)
+      .sort("asc")
+      .skip((query.page ? query.page - 1 : 0) * 8)
+      .limit(8);
 
     // If none found, send descriptive message
     if (!events.length)
       return res.status(404).json({
         success: false,
-        message: `No event with ${feedback["filterBy"]} given as ${
-          feedback["filterBy"] === "price" ? "$" : ""
-        }${feedback["search"] ? feedback["search"] : "empty"} was found.`,
+        message: `No event with ${Object.keys(filterObj).join()} given as ${
+          Object.keys(filterObj).includes("price") ? "$" : ""
+        }${
+          Object.values(filterObj) ? Object.values(filterObj) : "empty"
+        } was found.`,
       });
 
     // Success
@@ -265,31 +281,82 @@ const filterEvent = async (req, res, next) => {
    ======================== */
 const updateEvent = async (req, res, next) => {
   try {
-    // Ensure request body is not empty
-    if (!req.body)
+    // Check for empty body/files
+    if (
+      (!req.body || Object.keys(req.body).length === 0) &&
+      (!req.files || Object.keys(req.files).length === 0)
+    ) {
       return res
         .status(400)
         .json({ success: false, message: "Content to update is not provided" });
-
-    // Refine update body to ensure price is stored in DB as a number
-    function refinedBody(body = req.body) {
-      if (body.hasOwnProperty("price")) {
-        body["price"] = Number(body["price"]);
-      }
-      return body;
     }
 
-    // Update event by the event's ID and return only its name
-    const event = await EVENTS.findByIdAndUpdate(req.params.id, refinedBody(), {
-      new: true,
-    }).select("name -_id");
+    // Refine update body
+    const refinedBody = async () => {
+      const body = { ...req.body };
 
-    // Success message including updated fields and the updated event's name
+      if (body.price !== undefined) {
+        body.price = Number(body.price);
+      }
+
+      if (typeof body.coordinates === "string") {
+        body.coordinates = body.coordinates.split(", ");
+      }
+
+      if (body.location) {
+        const locate = await geocodeLocation(body.location);
+        if (!locate && !body.coordinates.length)
+          return res.status(400).json({
+            success: false,
+            message:
+              "Please Provide the coordinates of this suggested location.",
+          });
+      }
+
+      if (req.files?.file) {
+        if (!req.files.file.tempFilePath) {
+          return res
+            .status(400)
+            .json({ success: false, message: "Event image is required." });
+        }
+
+        const uploadImage = await cloudinary.uploader.upload(
+          req.files.file.tempFilePath,
+          {
+            folder: "Eventra/events",
+            unique_filename: false,
+            use_filename: true,
+          }
+        );
+
+        body.eventImage = uploadImage.secure_url;
+      }
+
+      return body;
+    };
+
+    const refined = await refinedBody();
+
+    // Update event and return only its title
+    const event = await EVENTS.findByIdAndUpdate(req.params.id, refined, {
+      new: true,
+    }).select("title -_id");
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: "Event not found!",
+      });
+    }
+
+    // Caution: this clears *all* Redis keys
+    await redisConfig.flushall("ASYNC");
+
     res.status(200).json({
       success: true,
-      message: `Successfully updated the ${Object.keys(req.body).join(
+      message: `Successfully updated ${Object.keys(refined).join(
         ", "
-      )} of the ${event.name} event.`,
+      )} of the ${event.title} event.`,
     });
   } catch (error) {
     next(error);
@@ -309,7 +376,17 @@ const cancelEvent = async (req, res, next) => {
       });
 
     // Update event status to cancelled
-    await EVENTS.findByIdAndUpdate(req.params.id, { status: "cancelled" });
+    const event = await EVENTS.findByIdAndUpdate(req.params.id, {
+      status: "cancelled",
+    });
+
+    if (!event)
+      return res.status(404).json({
+        success: false,
+        message: "Event not found!",
+      });
+
+    await redisConfig.flushall("ASYNC");
 
     res
       .status(200)
@@ -332,7 +409,15 @@ const deleteEvent = async (req, res, next) => {
       });
 
     // Permanently delete event
-    await EVENTS.findByIdAndDelete(req.params.id);
+    const event = await EVENTS.findByIdAndDelete(req.params.id);
+
+    if (!event)
+      return res.status(404).json({
+        success: false,
+        message: "Event not found!",
+      });
+
+    await redisConfig.flushall("ASYNC");
 
     res
       .status(200)
