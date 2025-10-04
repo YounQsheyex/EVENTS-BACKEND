@@ -114,14 +114,8 @@ const createEvents = async (req, res, next) => {
       eventEnd,
       price,
       category,
-      ticketTypes,
     } = req.body;
 
-    let ticketTypesJson = {};
-
-    if (typeof ticketTypes === "string") {
-      ticketTypesJson = JSON.parse(ticketTypes);
-    }
     await redisConfig.flushall("ASYNC");
 
     // Validate required fields
@@ -134,8 +128,7 @@ const createEvents = async (req, res, next) => {
       !eventStart ||
       !eventEnd ||
       !price ||
-      !category ||
-      !ticketTypesJson.length
+      !category
     )
       return res.status(400).json({
         success: false,
@@ -195,7 +188,6 @@ const createEvents = async (req, res, next) => {
       eventImage: uploadImage.secure_url, // Store Cloudinary image URL
       price,
       category,
-      ticketTypes: ticketTypesJson,
     };
 
     if (eventlocus) {
