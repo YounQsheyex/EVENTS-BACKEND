@@ -114,14 +114,8 @@ const createEvents = async (req, res, next) => {
       eventEnd,
       price,
       category,
-      ticketTypes,
     } = req.body;
 
-    let ticketTypesJson = {};
-
-    if (typeof ticketTypes === "string") {
-      ticketTypesJson = JSON.parse(ticketTypes);
-    }
     await redisConfig.flushall("ASYNC");
 
     // Validate required fields
@@ -134,8 +128,7 @@ const createEvents = async (req, res, next) => {
       !eventStart ||
       !eventEnd ||
       !price ||
-      !category ||
-      !ticketTypesJson.length
+      !category
     )
       return res.status(400).json({
         success: false,
@@ -195,7 +188,6 @@ const createEvents = async (req, res, next) => {
       eventImage: uploadImage.secure_url, // Store Cloudinary image URL
       price,
       category,
-      ticketTypes: ticketTypesJson,
     };
 
     if (eventlocus) {
@@ -241,6 +233,14 @@ const filterEvent = async (req, res, next) => {
         filterObj["price"] = query[filter] === "paid" ? { $gte: 1 } : 0;
       } else if (filter === "date") {
         filterObj["eventDate"] = new Date(query[filter]);
+      } else if (
+        Object.keys(query).includes("end") &&
+        Object.keys(query).includes("start")
+      ) {
+        filterObj["eventDate"] = {
+          $lte: new Date(query["end"]).toISOString(),
+          $gte: new Date(query["start"]).toISOString(),
+        };
       } else if (filter === "start") {
         filterObj["eventDate"] = {
           $gte: new Date(query[filter]).toISOString(),
