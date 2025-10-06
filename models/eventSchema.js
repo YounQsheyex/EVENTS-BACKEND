@@ -1,5 +1,9 @@
 const { default: mongoose } = require("mongoose");
 
+/*--------------------------------------------------
+--------- DEMO EVENT TICKET TYPES SCHEMA -----------
+----------------------------------------------------
+
 const eventTicketTypes = new mongoose.Schema({
   type: {
     type: String,
@@ -12,6 +16,10 @@ const eventTicketTypes = new mongoose.Schema({
     min: 0,
   },
 });
+
+------------------------------------------------------
+------------------------------------------------------
+*/
 
 // Define the Event schema
 const eventSchema = new mongoose.Schema(
@@ -98,7 +106,13 @@ const eventSchema = new mongoose.Schema(
       default: "upcoming",
     },
 
-    ticketTypes: [eventTicketTypes],
+    // collect ticket types in an array of objectIds referencing the Ticket model
+    ticketTypes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Ticket",
+      },
+    ],
 
     coordinates: {
       type: Array,
