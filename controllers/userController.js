@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const generateToken = require("../helpers/generateToken");
 const { sendWelcomeEmail, sendResetEmail } = require("../emails/sendemails");
+const { use } = require("passport");
 
 // registration controller
 const handleRegister = async (req, res) => {
@@ -14,6 +15,7 @@ const handleRegister = async (req, res) => {
     if (userExist) {
       res.status(400).json({ message: "Email or Phone Number Already Exist" });
     }
+
     const salt = await bcrypt.genSalt();
     const hashedPassword = await bcrypt.hash(password, salt);
     const verificationToken = generateToken();
@@ -238,6 +240,36 @@ const handleResetPassword = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+const handleChangePassword = async (req, res) => {
+  const { password } = req.body;
+  const userId = req.user._id;
+
+  if (!password) {
+    return res.status(400).json({ message: "Please enter a new password" });
+  }
+
+  try {
+    const user = await USER.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    await USER.findOneAndUpdate(
+      userId,
+      { password: hashedPassword },
+      { new: true }
+    );
+
+    res
+      .status(200)
+      .json({ success: true, message: "Password updated successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};
 
 module.exports = {
   handleRegister,
@@ -246,4 +278,5 @@ module.exports = {
   resendVerificationEmail,
   handleForgotPassword,
   handleResetPassword,
+  handleChangePassword,
 };
