@@ -238,6 +238,27 @@ const handleResetPassword = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+const handleChangePassword = async (req, res) => {
+  const { password } = req.body;
+
+  if (!password) {
+    return res.status(400).json({ message: "Please enter a new password" });
+  }
+
+  try {
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    await USER.updateOne({}, { $set: { password: hashedPassword } });
+
+    res
+      .status(200)
+      .json({ success: true, message: "Password updated successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};
 
 module.exports = {
   handleRegister,
@@ -246,4 +267,5 @@ module.exports = {
   resendVerificationEmail,
   handleForgotPassword,
   handleResetPassword,
+  handleChangePassword,
 };
