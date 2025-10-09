@@ -99,6 +99,12 @@ const eventSchema = new mongoose.Schema(
       required: [true, "Event category is required"],
     },
 
+    availableSeats: {
+      type: Number,
+      required: [true, "Available seats is required"],
+      min: [0, "Available seats cannot be negative"],
+    },
+
     // Event status - defaults to "upcoming"
     status: {
       type: String,

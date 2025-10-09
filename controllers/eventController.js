@@ -112,6 +112,7 @@ const createEvents = async (req, res, next) => {
       eventDate,
       eventStart,
       eventEnd,
+      availableSeats,
       price,
       category,
     } = req.body;
@@ -128,7 +129,8 @@ const createEvents = async (req, res, next) => {
       !eventStart ||
       !eventEnd ||
       !price ||
-      !category
+      !category ||
+      availableSeats === undefined
     )
       return res.status(400).json({
         success: false,
@@ -186,6 +188,7 @@ const createEvents = async (req, res, next) => {
       eventStart: dayjs.tz(eventStart, "Africa/Lagos").toDate(),
       eventEnd: dayjs.tz(eventEnd, "Africa/Lagos").toDate(),
       eventImage: uploadImage.secure_url, // Store Cloudinary image URL
+      availableSeats,
       price,
       category,
     };
@@ -231,6 +234,9 @@ const filterEvent = async (req, res, next) => {
         filterObj[filter] = query[filter];
       } else if (filter === "price") {
         filterObj["price"] = query[filter] === "paid" ? { $gte: 1 } : 0;
+      } else if (filter === "seats") {
+        filterObj["availableSeats"] =
+          query[filter] === "available" ? { $gte: 1 } : 0;
       } else if (filter === "date") {
         filterObj["eventDate"] = new Date(query[filter]);
       } else if (
@@ -297,6 +303,10 @@ const updateEvent = async (req, res, next) => {
 
       if (body.price !== undefined) {
         body.price = Number(body.price);
+      }
+
+      if (body.availableSeats !== undefined && body.availableSeats >= 0) {
+        body.availableSeats = Number(body.availableSeats);
       }
 
       if (typeof body.coordinates === "string") {
