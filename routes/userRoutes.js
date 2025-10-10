@@ -18,4 +18,4 @@ router.post("/forgot-password", handleForgotPassword);
 router.post("/reset-password", handleResetPassword);
 router.post("/change-password/:id", isUser, isAdmin, handleChangePassword);
 
-module.exports = router;
+module.exports = router; 

@@ -174,4 +174,39 @@ const resetEmailTemplate = (firstname, clientUrl) => {
 </html>`;
 };
 
-module.exports = { createWelcomeEmail, resetEmailTemplate };
+const PaymentComfirmationEmail = (firstname, reference, amount, currency, ticketDetails) => {
+  // You should convert the amount from the subunit (e.g. kobo) to the major unit (e.g. Naira) here.
+  const displayAmount = (amount / 100).toFixed(2); 
+
+  return `
+    <html>
+      <body>
+        <p style="font-size: 18px; color: #000000">
+        <strong>Hello ${firstname},</strong>
+      </p>
+      <div
+        style="
+          background-color: #f3f6f8;
+          padding: 20px;
+          border-radius: 8px;
+          margin: 20px 0;
+        "
+      >
+        <p>Thank you for your purchase! Your order is confirmed.</p>
+        
+        <h2>Order Details</h2>
+        <p><strong>Transaction Reference:</strong> ${reference}</p>
+        <p><strong>Amount Paid:</strong> ${currency} ${displayAmount}</p>
+        
+        <p><strong>Event:</strong> ${ticketDetails.eventName}</p>
+        <p><strong>Tickets Purchased:</strong> ${ticketDetails.quantity}</p>
+        
+        <p>Your tickets are attached or available in your user dashboard.</p>
+        <p>Thank you,<br>The Eventra Team</p>
+      </div>
+      </body>
+    </html>
+  `;
+};
+
+module.exports = { createWelcomeEmail, resetEmailTemplate,PaymentComfirmationEmail };
