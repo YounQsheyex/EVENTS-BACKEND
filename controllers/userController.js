@@ -12,7 +12,7 @@ const handleRegister = async (req, res) => {
       $or: [{ email: email || null }, { phoneNumber: phoneNumber || null }],
     });
     if (userExist) {
-      res.status(400).json({ message: "Email or Phone Number Already Exist" });
+      res.status(400).json({ message: "Email or Phone Number Already Existt" });
     }
     const salt = await bcrypt.genSalt();
     const hashedPassword = await bcrypt.hash(password, salt);

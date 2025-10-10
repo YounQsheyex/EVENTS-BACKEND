@@ -15,4 +15,4 @@ router.post("/resend-email", resendVerificationEmail);
 router.post("/forgot-password", handleForgotPassword);
 router.post("/reset-password", handleResetPassword);
 
-module.exports = router;
+module.exports = router; 
