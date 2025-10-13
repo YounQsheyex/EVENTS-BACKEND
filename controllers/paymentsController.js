@@ -8,6 +8,9 @@ const { sendPaymentConfirmationEmail, sendVerifyPaymentlink } = require("../emai
 const { generateTicketInstances } = require("../helpers/ticketInstance");
 
 
+const baseUrl = process.env.BACKEND_URL.replace(/\/$/, ''); 
+
+
 const handlePaymentInitialization = async (req, res, next) => {
     const { quantity: Quantity, firstname, lastname } = req.body;
     const { ticketId } = req.params;
@@ -59,7 +62,7 @@ const handlePaymentInitialization = async (req, res, next) => {
             email,
             amount: totalAmount * 100, // Convert to kobo
             reference: reference,
-            callback_url: `${process.env.BACKEND_URL_TEST}/api/payments/verify`,
+            callback_url: `${baseUrl}/api/payments/verify`,
             metadata: {
                 user: userId,
                 ticket: ticketId,
@@ -80,7 +83,6 @@ const handlePaymentInitialization = async (req, res, next) => {
             status: "pending"
         });
 
-        const confirmationLink = response.data.authorization_url; // Use Paystack's URL
 
         // setImmediate(async () => {
         //     try {
@@ -324,7 +326,6 @@ const handlePaymentVerification = async (req, res, next) => {
 
 const handleAllTransactions = async (req, res, next) => {
     // Robustly extract user ID from req.user (which holds the Mongoose document)
-    const { _id: userId } = req.user; 
 
     try {
         const transactions = await paymentSchema

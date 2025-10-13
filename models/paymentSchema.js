@@ -15,12 +15,12 @@ const paymentSchema = new mongoose.Schema({
       type:String,
       required:true
     },
-    ticket: { // REVERTED to 'ticket' to resolve the "Cannot populate path `ticket`" error
+    ticket: { 
       type: mongoose.Schema.Types.ObjectId,
       ref: "ticket",
       required: true,
     },
-    // ADDED: Array to hold references to the individual generated tickets
+    // ADDED: Array to hold references to the individual generated tickets
     ticketInstances: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: "TicketInstance", // Assuming your Ticket Instance model name is 'TicketInstance'
@@ -49,4 +49,3 @@ const paymentSchema = new mongoose.Schema({
 }, { timestamps: true })
 
 module.exports = mongoose.model("ticketPayment", paymentSchema)
-
