@@ -174,15 +174,23 @@ const resetEmailTemplate = (firstname, clientUrl) => {
 </html>`;
 };
 
-const PaymentComfirmationEmail = (firstname, reference, amount, currency, ticketDetails) => {
+const PaymentComfirmationEmail = (lastname, amount,reference, currency, ticketDetails) => {
   // You should convert the amount from the subunit (e.g. kobo) to the major unit (e.g. Naira) here.
   const displayAmount = (amount / 100).toFixed(2); 
 
   return `
     <html>
-      <body>
+      <body 
+        style="
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      ">
         <p style="font-size: 18px; color: #000000">
-        <strong>Hello ${firstname},</strong>
+        <strong>Hello ${lastname},</strong>
       </p>
       <div
         style="
@@ -195,7 +203,7 @@ const PaymentComfirmationEmail = (firstname, reference, amount, currency, ticket
         <p>Thank you for your purchase! Your order is confirmed.</p>
         
         <h2>Order Details</h2>
-        <p><strong>Transaction Reference:</strong> ${reference}</p>
+        <p><strong>Transaction Reference:</strong>your reference transaction no: ${reference}</p>
         <p><strong>Amount Paid:</strong> ${currency} ${displayAmount}</p>
         
         <p><strong>Event:</strong> ${ticketDetails.eventName}</p>
@@ -209,4 +217,145 @@ const PaymentComfirmationEmail = (firstname, reference, amount, currency, ticket
   `;
 };
 
-module.exports = { createWelcomeEmail, resetEmailTemplate,PaymentComfirmationEmail };
+
+const verifyItYouEmail = (firstname, verificationUrl) => {
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Verify Your Email</title>
+  </head>
+  <body
+    style="
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    "
+  >
+    <div
+      style="
+        background-color: #045854;
+        padding: 30px;
+        text-align: center;
+        border-radius: 10px 10px 0 0;
+      "
+    >
+      <img
+        src="https://res.cloudinary.com/dgvucesc6/image/upload/Frame_2121455760_fj8zmx.png"
+        alt="eventra"
+        style="
+          max-width: 700.3px;
+          max-height: 43.92px;
+          margin-bottom: 20px;
+          border-radius: 5px;
+        "
+      />
+
+      <h1 style="color: white; margin: 0; font-size: 28px">Verify Your Email!</h1>
+    </div>
+    <div
+      style="
+        background-color: #ffffff;
+        padding: 30px;
+        border-radius: 0 0 10px 10px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      "
+    >
+      <p style="font-size: 18px; color: #000000">
+        <strong>Hello ${firstname},</strong>
+      </p>
+      <p>Welcome to Eventra! We're excited to have you on board.</p>
+      <div
+        style="
+          background-color: #f3f6f8;
+          padding: 20px;
+          border-radius: 8px;
+          margin: 20px 0;
+        "
+      >
+        <h1 style="font-size: 22px; color: #045854; margin-top: 0;">
+          Please Verify Your Email Address
+        </h1>
+        <p>
+          To complete your registration and start exploring amazing events, 
+          please verify your email address by clicking the button below.
+        </p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a 
+            href="${verificationUrl}" 
+            clicktracking="off" 
+            target="_blank"
+            style="
+              background-color: #045854;
+              color: white;
+              padding: 15px 40px;
+              text-decoration: none;
+              border-radius: 5px;
+              font-size: 16px;
+              font-weight: bold;
+              display: inline-block;
+            "
+          >
+            Verify Email Address
+          </a>
+        </div>
+        <p style="font-size: 14px; color: #666; margin-top: 20px;">
+          If the button doesn't work, copy and paste this link into your browser:
+        </p>
+        <p style="
+          font-size: 12px; 
+          color: #045854; 
+          word-break: break-all;
+          background-color: #e8f4f3;
+          padding: 10px;
+          border-radius: 4px;
+        ">
+          ${verificationUrl}
+        </p>
+      </div>
+
+      <div
+        style="
+          background-color: #fff3cd;
+          border-left: 4px solid #ffc107;
+          padding: 15px;
+          margin: 20px 0;
+          border-radius: 4px;
+        "
+      >
+        <p style="margin: 0; color: #856404; font-size: 14px;">
+          <strong>⚠️ Important:</strong> This verification link will expire in 24 hours.
+        </p>
+      </div>
+
+      <p>
+        If you didn't create an account with Eventra, you can safely ignore this email.
+      </p>
+
+      <p>
+        If you have any questions or need assistance, our support team is always
+        here to help.
+      </p>
+      <p>Best regards,<br />Eventra Team</p>
+    </div>
+    <div
+      style="
+        text-align: center;
+        padding: 20px;
+        color: #666;
+        font-size: 12px;
+      "
+    >
+      <p>© ${new Date().getFullYear()} Eventra. All rights reserved.</p>
+      <p>
+        This email was sent to you as part of your Eventra registration.
+      </p>
+    </div>
+  </body>
+</html>`;
+};
+module.exports = { createWelcomeEmail, resetEmailTemplate,PaymentComfirmationEmail, verifyItYouEmail};
