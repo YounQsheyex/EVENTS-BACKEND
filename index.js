@@ -20,6 +20,8 @@ const googleRoutes = require("./routes/googleRoutes");
 const errorMiddleware = require("./middleware/error");
 // Import arcjet middleware to handle rate limiting throughout the API.
 const arcjetMiddleware = require("./middleware/arjectMiddleware");
+const redisConfig = require("./helpers/redis");
+const { DRAFTED_EVENTS } = require("./models/eventSchema");
 
 // middleware
 app.use(express.json());
@@ -68,6 +70,14 @@ app.use("/", (req, res) => {
 const startServer = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URL, { dbName: "EVENTS-DB" });
+    DRAFTED_EVENTS.deleteMany({ title: "This Is A Drafted Event DEMO" }); // Clear the DraftedEvents collection on server start
+    redisConfig.flushall("ASYNC", (err, succeeded) => {
+      if (err) {
+        console.error("Error flushing Redis cache:", err);
+      } else {
+        console.log("Redis cache flushed successfully:", succeeded);
+      }
+    });
     app.listen(PORT, () => {
       console.log(`App Running on PORT ${PORT}`);
     });
