@@ -62,7 +62,7 @@ const handlePaymentInitialization = async (req, res, next) => {
             email,
             amount: totalAmount * 100, // Convert to kobo
             reference: reference,
-            callback_url: `${baseUrl}/api/payments/verify`,
+            callback_url: `${process.env.BACKEND_URL_TEST}/api/payments/verify`,
             metadata: {
                 user: userId,
                 ticket: ticketId,
@@ -71,6 +71,14 @@ const handlePaymentInitialization = async (req, res, next) => {
                 lastname: lastname
             }
         });
+
+         if (!response.status || !response.data) {
+             console.error("Paystack Initialization Failed:", response);
+             return res.status(400).json({
+                 status: "fail",
+                 message: response.message || "Failed to initialize payment with Paystack. Check your API key and input data."
+             });
+        }
 
         const payment = await paymentSchema.create({
             user: userId,
@@ -233,7 +241,7 @@ const handlePaymentVerification = async (req, res, next) => {
                 payment, 
                 ticket, 
                 user,
-                session // <-- FIX: Session passed here for atomicity!
+                session
             );
             console.log(`Generated ${generatedTickets.length} ticket instances.`);
 
@@ -250,7 +258,7 @@ const handlePaymentVerification = async (req, res, next) => {
             // --- POST-TRANSACTION ACTIONS (Emails) ---
             const customerEmail = user.email;
             const customerName = payment.lastname || payment.firstname || 'Customer';
-            const amount = transactionResult.data.amount / 100;
+            const amount = payment.amount / 100;
             const currency = transactionResult.data.currency;
 
             // This object contains the full list of generated tickets, suitable for the email template
@@ -275,7 +283,7 @@ const handlePaymentVerification = async (req, res, next) => {
                 await sendPaymentConfirmationEmail({
                     email: customerEmail,
                     lastname: customerName,
-                    reference: reference,
+                    reference: payment.reference,
                     amount: amount,
                     status: payment.status,
                     currency: currency,

@@ -5,7 +5,7 @@ const ticketSchema = require("../models/ticketSchema");
 
 // create different type of ticket for a single event
 // getting the event id from the url
-const createTicket = async (req, res, next) => {
+const handleCreateTicket = async (req, res, next) => {
    const {
     name,
     type,
@@ -14,12 +14,12 @@ const createTicket = async (req, res, next) => {
     price,
     status
   } = req.body;;
-  // const  eventId = req.params.eventId
+  const  eventId = req.params.eventId
 
   if (!name 
     || !type
     || !quantity
-    // || !eventId
+    || !eventId
     || !price
     || !maxOrder
     || !status ) {
@@ -35,7 +35,8 @@ const createTicket = async (req, res, next) => {
     quantity,
     maxOrder,
     price,
-    status
+    status,
+    event:eventId
    })
 
     // response
@@ -60,7 +61,7 @@ const createTicket = async (req, res, next) => {
 
 
 // to update ticket details
-const updateTicket = async (req, res, next) => {
+const handleUpdateTicket = async (req, res, next) => {
   const { ticketId } = req.params;
   const { price, quantity, maxOrder, status, name, type } = req.body;
 
@@ -106,27 +107,27 @@ const updateTicket = async (req, res, next) => {
 };
 
 // to get all ticket partaining to a particular event
-// const getAllTicket = async (req,res,next)=>{
-//   const {eventId} = req.body
+const handleGetAllTicket = async (req,res,next)=>{
+  const {eventId} = req.params
 
-//   try {
-//     const allTicket = await TicketSchema.find({eventId})
+  try {
+    const allTicket = await TicketSchema.find({eventId})
 
-//     if(!allTicket){
-//       return  res.status(404).json({success:false, message:"there are currently no available ticket"})
-//     }
+    if(!allTicket){
+      return  res.status(404).json({success:false, message:"there are currently no available ticket"})
+    }
 
-//     res.status(200).json({
-//         success:true,
-//         message:`available tickets to ${eventId}`,
-//          allTicket})
-//   } catch (error) {
-//     next(error)
-//   }
-// }
+    res.status(200).json({
+        success:true,
+        message:`available tickets to ${eventId}`,
+         allTicket})
+  } catch (error) {
+    next(error)
+  }
+}
 
 
-const deleteTicket = async (req, res, next) => {
+const handleDeleteTicket = async (req, res, next) => {
   const { ticketId } = req.params;
 
   if (!ticketId) {
@@ -170,4 +171,7 @@ const deleteTicket = async (req, res, next) => {
 };
 
 
-module.exports = { createTicket, updateTicket, deleteTicket };
+module.exports = { handleCreateTicket,
+  handleUpdateTicket,
+  handleDeleteTicket,
+  handleGetAllTicket };

@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 //  Ticket schema
 const TicketSchema = new mongoose.Schema({
-    eventId: {
+    event: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Events",
         // required: [true, "Please provide the event ID."],
