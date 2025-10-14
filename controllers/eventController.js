@@ -1,5 +1,5 @@
 // Import mongoose utility for starting sessions (used for transactions)
-const { startSession } = require("mongoose");
+const { startSession, default: mongoose } = require("mongoose");
 
 // Import the main dayjs library
 const dayjs = require("dayjs");
@@ -120,7 +120,7 @@ const getDraftedEventById = async (req, res, next) => {
     if (!event)
       return res
         .status(404)
-        .json({ success: false, message: "Event not found." });
+        .json({ success: false, message: "Drafted Event not found." });
 
     // Success: return event details
     res.status(200).json({ success: true, event });
@@ -167,6 +167,8 @@ const draftEvents = async (req, res, next) => {
       maxCapacity,
       price,
       category,
+      status,
+      ticketTypes,
     } = req.body;
 
     await redisConfig.flushall("ASYNC");
@@ -212,6 +214,7 @@ const draftEvents = async (req, res, next) => {
       );
     }
 */
+
     const eventObj = {
       title,
       description,
@@ -225,16 +228,16 @@ const draftEvents = async (req, res, next) => {
       maxCapacity,
       price,
       category,
+      status,
+      ticketTypes: ticketTypes ? [...mongoose.Types.ObjectId(ticketTypes)] : [],
     };
 
     if (eventlocus) {
       eventObj["coordinates"] = eventlocus;
     }
 
-    console.log(eventObj);
     // Create new event document inside a transaction
     const event = await DRAFTED_EVENTS.create(eventObj);
-    console.log(event);
 
     res.status(200).json({
       success: true,
@@ -266,7 +269,10 @@ const createEvents = async (req, res, next) => {
       maxCapacity,
       price,
       category,
-    } = req.body;
+      status,
+      ticketTypes,
+      eventImage,
+    } = req.body.id ? await DRAFTED_EVENTS.findById(req.body.id) : req.body;
 
     await redisConfig.flushall("ASYNC");
 
@@ -297,7 +303,7 @@ const createEvents = async (req, res, next) => {
       });
 
     // Ensure event image is uploaded
-    if (!req.files.file.tempFilePath)
+    if (!req.files?.file.tempFilePath && !eventImage)
       return res.status(400).json({
         success: false,
         message: "Event image is required but no image is provided.",
@@ -323,14 +329,14 @@ const createEvents = async (req, res, next) => {
     const eventlocus = await geocodeLocation(location);
 
     // Upload image to Cloudinary
-    const uploadImage = await cloudinary.uploader.upload(
-      req.files.file.tempFilePath,
-      {
-        folder: "Eventra/events",
-        unique_filename: false,
-        use_filename: true,
-      }
-    );
+    const uploadImage =
+      eventImage.length > 0
+        ? eventImage
+        : await cloudinary.uploader.upload(req.files.file.tempFilePath, {
+            folder: "Eventra/events",
+            unique_filename: false,
+            use_filename: true,
+          });
 
     // E.g:==> Create a date for "2025-09-21 15:15" in Africa/Lagos timezone
     //  - "2025-09-21 15:15" is just a string (local representation)
@@ -348,10 +354,12 @@ const createEvents = async (req, res, next) => {
       eventDate: dayjs.tz(eventDate, "Africa/Lagos").toDate(),
       eventStart: dayjs.tz(eventStart, "Africa/Lagos").toDate(),
       eventEnd: dayjs.tz(eventEnd, "Africa/Lagos").toDate(),
-      eventImage: uploadImage.secure_url, // Store Cloudinary image URL
+      eventImage: eventImage ? eventImage : uploadImage.secure_url, // Store Cloudinary image URL
       maxCapacity,
       price,
       category,
+      status,
+      ticketTypes: ticketTypes ? ticketTypes : [],
     };
 
     if (eventlocus) {
@@ -360,6 +368,9 @@ const createEvents = async (req, res, next) => {
 
     // Create new event document inside a transaction
     const event = await EVENTS.create([eventObj], { session });
+
+    // Remove the created event from DraftedEvents if it exists there and id is provided as a req.body
+    if (req.body.id) await DRAFTED_EVENTS.findByIdAndDelete(req.body.id);
 
     // Commit transaction (make changes permanent)
     await session.commitTransaction();
@@ -481,13 +492,17 @@ const updateEvent = async (req, res, next) => {
       }
 
       if (body.location) {
+        console.log("location:", body.location);
         const locate = await geocodeLocation(body.location);
+        console.log("geocodeLocation:", locate);
         if (!locate && !body.coordinates.length)
           return res.status(400).json({
             success: false,
             message:
               "Please Provide the coordinates of this suggested location.",
           });
+
+        body.coordinates = locate;
       }
 
       if (req.files?.file) {
@@ -535,9 +550,9 @@ const updateEvent = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: `Successfully updated ${Object.keys(refined).join(
-        ", "
-      )} of the ${event.title} event.`,
+      message: `Successfully updated ${Object.keys(refined)
+        .join(", ")
+        .replace(/, ([^,]*)$/, " and $1")} of the ${event.title} event.`,
     });
   } catch (error) {
     next(error);
