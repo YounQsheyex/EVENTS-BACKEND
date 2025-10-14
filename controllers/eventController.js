@@ -287,7 +287,6 @@ const createEvents = async (req, res, next) => {
       !eventEnd ||
       !price ||
       !category ||
-      ticketTypes.length === 0 ||
       maxCapacity === undefined
     )
       return res.status(400).json({
@@ -329,14 +328,13 @@ const createEvents = async (req, res, next) => {
     const eventlocus = await geocodeLocation(location);
 
     // Upload image to Cloudinary
-    const uploadImage =
-      eventImage.length > 0
-        ? eventImage
-        : await cloudinary.uploader.upload(req.files.file.tempFilePath, {
-            folder: "Eventra/events",
-            unique_filename: false,
-            use_filename: true,
-          });
+    const uploadImage = eventImage
+      ? eventImage
+      : await cloudinary.uploader.upload(req.files.file.tempFilePath, {
+          folder: "Eventra/events",
+          unique_filename: false,
+          use_filename: true,
+        });
 
     // E.g:==> Create a date for "2025-09-21 15:15" in Africa/Lagos timezone
     //  - "2025-09-21 15:15" is just a string (local representation)
