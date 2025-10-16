@@ -25,15 +25,29 @@ const eventTicketTypes = new mongoose.Schema({
 const draftEventSchema = new mongoose.Schema(
   {
     // Event title
-    title: String,
+    title: {
+      type: String,
+      minlength: [5, "Event title must be at least 5 characters."],
+      maxlength: [100, "Event title cannot exceed 100 characters."],
+    },
 
     // Event description
-    description: String,
+    description: {
+      type: String,
+      minlength: [10, "Event description must be at least 10 characters."],
+      maxlength: [500, "Event description cannot exceed 500 characters."],
+    },
 
     // Event highlights
-    highlight: String,
+    highlight: {
+      type: String,
+      minlength: [5, "Event highlight must be at least 5 characters."],
+    },
+
     // Location of the event
-    location: String,
+    location: {
+      type: String,
+    },
 
     // Event date
     eventDate: Date,
@@ -59,7 +73,9 @@ const draftEventSchema = new mongoose.Schema(
     },
 
     // Image representing the event
-    eventImage: String,
+    eventImage: {
+      type: String,
+    },
 
     // Event category - must be one of the given values
     category: {
@@ -95,7 +111,7 @@ const draftEventSchema = new mongoose.Schema(
     ticketTypes: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Ticket",
+        ref: "ticket",
       },
     ],
 
@@ -248,7 +264,7 @@ const eventSchema = new mongoose.Schema(
     ticketTypes: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Ticket",
+        ref: "ticket",
       },
     ],
 

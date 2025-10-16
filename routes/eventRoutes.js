@@ -34,8 +34,13 @@ router.get("/", cache("All events: "), getAllEvents);
 // Fetch all draft events and cache the response
 router.get("/drafts", cache("All draft events: "), getDraftEvents);
 
+
+// Route: GET /api/events/upcoming?page=pageNumber
+// Fetch events with category = "upcoming" and cache the response with key "All upcoming events: params or query"
+
 // Route: GET /api/events/upcoming
 // Fetch events with category = "upcoming" and cache the response
+
 router.get("/upcoming", cache("All upcoming events: "), getAllUpComingEvents);
 
 // Route: GET /api/events/filterby?field=value
@@ -93,6 +98,14 @@ router.delete("/drafts/delete/:id", isUser, isAdmin, deleteDraftedEvent);
 // Delete event by ID (admin only)
 router.delete("/delete/:id", isUser, isAdmin, deleteEvent);
 
+
+// Route: GET /api/events/:id
+// Fetch event by ID and cache the response
+router.get("/:id", cache("Event details: "), getEventById);
+
+// Route: GET /api/events/drafts/:id
+// Fetch event by ID and cache the response
+router.get("/drafts/:id", cache("Draft event details: "), getDraftedEventById);
 
 // Export router so it can be used in server.js / app.js
 module.exports = router;
