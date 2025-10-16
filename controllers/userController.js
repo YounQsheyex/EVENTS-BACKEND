@@ -247,7 +247,7 @@ const handleChangePassword = async (req, res) => {
   if (!oldPassword || !newPassword) {
     return res
       .status(400)
-      .json({ message: "Please enter a old and new password" });
+      .json({ message: "Please enter  old and new password" });
   }
 
   try {
