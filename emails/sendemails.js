@@ -1,5 +1,10 @@
 const nodemailer = require("nodemailer");
-const { createWelcomeEmail, resetEmailTemplate } = require("./emailtemplate");
+const {
+  createWelcomeEmail,
+  resetEmailTemplate,
+  PaymentComfirmationEmail,
+  verifyItYouEmail,
+} = require("./emailtemplate");
 const sgMail = require("@sendgrid/mail");
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -65,4 +70,67 @@ const sendResetEmail = async ({ firstname, clientUrl, email }) => {
   });
 };
 
-module.exports = { sendWelcomeEmail, sendResetEmail };
+const sendPaymentConfirmationEmail = async ({
+  email,
+  firstname,
+  reference,
+  amount,
+  currency,
+  ticketDetails,
+}) => {
+  const subject = "Your Purchase Confirmation & Ticket Details";
+  const html = PaymentComfirmationEmail(
+    firstname,
+    reference,
+    amount,
+    currency,
+    ticketDetails
+  );
+
+  sendEmail({
+    to: email,
+    subject,
+    html,
+  });
+};
+
+module.exports = {
+  sendWelcomeEmail,
+  sendResetEmail,
+  sendPaymentConfirmationEmail,
+};
+const sendVerifyPaymentlink = async ({
+  email,
+  lastname,
+  reference,
+  amount,
+  status,
+  currency,
+  ticketDetails,
+  verificationLink,
+}) => {
+  const subject = "Your Purchase Confirmation & Ticket Details";
+  const html = verifyItYouEmail(
+    email,
+    lastname,
+    reference,
+    amount,
+    status,
+    currency,
+    ticketDetails,
+    verificationLink
+  );
+
+  sendEmail({
+    to: email,
+    subject,
+    html,
+  });
+};
+
+module.exports = {
+  sendWelcomeEmail,
+  sendResetEmail,
+  sendPaymentConfirmationEmail,
+  sendVerifyPaymentlink,
+};
