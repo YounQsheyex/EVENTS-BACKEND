@@ -222,8 +222,8 @@ const handlePaymentVerification = async (req, res, next) => {
 
         const user = await userSchema.findById(payment.user); 
         
-         console.log('TICKET EVENT VALUE:', ticket.event?._id || ticket.event);
-         console.log(" Using event for ticket instance:", payment.event?._id || payment.event)
+        //  console.log('TICKET EVENT VALUE:', ticket.event?._id || ticket.event);
+        //  console.log(" Using event for ticket instance:", payment.event?._id || payment.event)
 //         console.log({user:user})
 //         console.log({ticket:ticket})
 
@@ -266,7 +266,7 @@ if (!payment.event && ticket.event) {
     await payment.save({ session });
 }
 
-console.log(" Using event for ticket instance:", payment.event._id)
+// console.log(" Using event for ticket instance:", payment.event._id)
 
             // 2. Generate Ticket Instances (CRITICAL FIX: SESSION PASSED)
             generatedTickets = await generateTicketInstances(
@@ -275,7 +275,7 @@ console.log(" Using event for ticket instance:", payment.event._id)
                 user,
                 session
             );
-            console.log(`Generated ${generatedTickets.length} ticket instances.`);
+//             console.log(`Generated ${generatedTickets.length} ticket instances.`);
 
             // 3. Update Payment Status
             payment.status = "success";

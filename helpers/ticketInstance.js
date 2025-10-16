@@ -15,12 +15,6 @@ const generateTicketInstances = async (payment, ticket, user, session) => {
         eventId = new mongoose.Types.ObjectId(eventId);
     }
     
-    console.log("=== generateTicketInstances Debug ===");
-    console.log("eventId:", eventId);
-    console.log("eventId type:", typeof eventId);
-    console.log("Is ObjectId:", eventId instanceof mongoose.Types.ObjectId);
-    console.log("===================================");
-    
     if (!eventId) {
         throw new Error('Event ID is required to generate ticket instances');
     }
@@ -45,9 +39,7 @@ const generateTicketInstances = async (payment, ticket, user, session) => {
             attendeeName: `${payment.firstname} ${payment.lastname}`,
             attendeeEmail: user.email,
             status: 'valid',
-            // eventName: ticket.event.title  || ticket.event ,
-            // eventDate: ticket.event.eventDate,
-            // eventLocation: ticket.event.location, // Assuming 'location' field exists on ticket model
+            
             metadata: {
                 purchaseDate: payment.paidAt,
                 price: ticket.price,
