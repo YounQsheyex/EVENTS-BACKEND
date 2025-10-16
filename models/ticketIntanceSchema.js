@@ -8,16 +8,21 @@ const ticketInstanceSchema = new mongoose.Schema({
     },
     user: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'users', // FIX: Changed 'User' to 'users' for consistency with paymentSchema
+        ref: 'users', 
         required: true
     },
     ticketType: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'ticket',
+        ref: 'TicketMain',
         required: true
     },
+    event: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Events",
+            required: [true, "Please provide the event ID."],
+        },
     ticketNumber: {
-        type: String, // FIX: Corrected type from Date.Now to String
+        type: String, 
         required: true,
         unique: true 
     },
@@ -43,9 +48,9 @@ const ticketInstanceSchema = new mongoose.Schema({
         type: Date
     },
     
-    eventName: String,
-    eventDate: Date,
-    eventLocation: String,
+//     eventName: String,
+//     eventDate: Date,
+//     eventLocation: String,
     metadata: {
         type: Object,
         default: {}
