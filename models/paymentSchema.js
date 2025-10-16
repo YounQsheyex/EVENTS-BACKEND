@@ -6,6 +6,10 @@ const paymentSchema = new mongoose.Schema({
       ref: "users",
       required: true,
     },
+    event: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Events"
+    },
     // Removed the ambiguous 'purchasedTicketDetails' field.
     firstname:{
       type:String,
@@ -17,13 +21,13 @@ const paymentSchema = new mongoose.Schema({
     },
     ticket: { 
       type: mongoose.Schema.Types.ObjectId,
-      ref: "ticket",
+      ref: "TicketMain",
       required: true,
     },
     // ADDED: Array to hold references to the individual generated tickets
     ticketInstances: [{
       type: mongoose.Schema.Types.ObjectId,
-      ref: "TicketInstance", // Assuming your Ticket Instance model name is 'TicketInstance'
+      ref: "TicketInstance", 
     }],
     quantity:{
       type:Number,
