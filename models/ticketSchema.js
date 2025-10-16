@@ -1,46 +1,66 @@
 const mongoose = require("mongoose");
 
-//  Ticket schema
+//  Ticket schema
 const TicketSchema = new mongoose.Schema({
-    eventId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Events",
-        // required: [true, "Please provide the event ID."],
-        unique:[true, "ticket already exist for this event"]
-    },
+    event: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Events",
+        required: [true, "Please provide the event ID."],
+    },
 
-    name:{
-        type:String,
-        required:true,
-    },
+    name: {
+        type: String,
+        required: [true, "Ticket name is required"],
+        trim: true
+    },
 
-    price: {
-        type:Number,
-        required: [true,"please enter ticket prices"],
-    },
-    type:{
-        type:String,
-        enum:["free","paid"],
-        required:[true, "select ticket type"],
-        default:"free"
-    },
+    price: {
+        type: Number,
+        required: [true, "Please enter ticket price"],
+        min: [0, "Price cannot be negative"]
+    },
 
-    maxTicketPerOrder:{
-        type:Number,
-    },
-    
-    quantity: {
-    type: Number,
-    required: [true,"ticket available quantity is required"],
-    default: 0
-  },
-    status: {
-        type: String,
-        enum: ["available", "sold out"],
-        default: "available",
-        required:[true,"ticket status is required"],
-    },
-    // eventStatus:{type:string}
- }, { timestamps: true });
+    type: {
+        type: String,
+        enum: {
+            values: ["free", "paid"],
+            message: "Ticket type must be either free or paid"
+        },
+        required: [true, "Select ticket type"],
+        default: "free"
+    },
 
-module.exports = mongoose.model("ticket", TicketSchema);
+    maxOrder: {
+        type: Number,
+        required: [true, "Maximum tickets per order is required"],
+        min: [1, "Maximum order must be at least 1"],
+        default: 1
+    },
+    
+    quantity: {
+        type: Number,
+        required: [true, "Ticket available quantity is required"],
+        min: [0, "Quantity cannot be negative"],
+        default: 0
+    },
+
+    status: {
+        type: String,
+        enum: {
+            values: ["available", "sold out"],
+            message: "Status must be either available or sold out"
+        },
+        default: "available",
+        required: [true, "Ticket status is required"]
+    }
+}, { 
+    timestamps: true 
+});
+
+// Instance method to check availability
+TicketSchema.methods.isAvailable = function() {
+    return this.status === "available" && this.quantity > 0;
+};
+
+const Ticket = mongoose.model("TicketMain", TicketSchema);
+module.exports = Ticket;

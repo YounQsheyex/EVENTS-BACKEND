@@ -3,6 +3,7 @@ const {
   createWelcomeEmail,
   resetEmailTemplate,
   PaymentComfirmationEmail,
+  verifyItYouEmail,
 } = require("./emailtemplate");
 const sgMail = require("@sendgrid/mail");
 
@@ -97,4 +98,39 @@ module.exports = {
   sendWelcomeEmail,
   sendResetEmail,
   sendPaymentConfirmationEmail,
+};
+const sendVerifyPaymentlink = async ({
+  email,
+  lastname,
+  reference,
+  amount,
+  status,
+  currency,
+  ticketDetails,
+  verificationLink,
+}) => {
+  const subject = "Your Purchase Confirmation & Ticket Details";
+  const html = verifyItYouEmail(
+    email,
+    lastname,
+    reference,
+    amount,
+    status,
+    currency,
+    ticketDetails,
+    verificationLink
+  );
+
+  sendEmail({
+    to: email,
+    subject,
+    html,
+  });
+};
+
+module.exports = {
+  sendWelcomeEmail,
+  sendResetEmail,
+  sendPaymentConfirmationEmail,
+  sendVerifyPaymentlink,
 };
