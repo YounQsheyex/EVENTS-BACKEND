@@ -3,9 +3,10 @@
 const TicketInstance = require('../models/ticketInstanceSchema');
 
 
-const generateTicketInstances = async (payment, ticket, user) => {
+const generateTicketInstances = async (payment, ticket, user,session) => {
     const ticketInstances = [];
     const quantity = payment.quantity;
+
 
     for (let i = 0; i < quantity; i++) {
         // Generate unique ticket number (e.g., EVT-2025-ABCD1234-01)
@@ -21,7 +22,8 @@ const generateTicketInstances = async (payment, ticket, user) => {
             ticketType: ticket._id,
             ticketNumber: ticketNumber,
             ticketToken: ticketToken,
-            qrCode: qrCodeData,
+            event: payment.event._id,
+            // qrCode: qrCodeData,
             attendeeName: `${payment.firstname} ${payment.lastname}`,
             attendeeEmail: user.email,
             status: 'valid',

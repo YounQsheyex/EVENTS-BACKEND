@@ -241,20 +241,27 @@ const handleResetPassword = async (req, res) => {
   }
 };
 const handleChangePassword = async (req, res) => {
-  const { password } = req.body;
+  const { oldPassword, newPassword } = req.body;
   const userId = req.user._id;
 
-  if (!password) {
-    return res.status(400).json({ message: "Please enter a new password" });
+  if (!oldPassword || !newPassword) {
+    return res
+      .status(400)
+      .json({ message: "Please enter a old and new password" });
   }
 
   try {
     const user = await USER.findById(userId);
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
+    const passwordMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!passwordMatch) {
+      return res.status(400).json({ message: "Old Password is Incorrect" });
+    }
     const salt = await bcrypt.genSalt();
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
 
     await USER.findOneAndUpdate(
       userId,
@@ -271,6 +278,27 @@ const handleChangePassword = async (req, res) => {
   }
 };
 
+// Get all users
+const getAllUsers = async (req, res) => {
+  try {
+    const users = await USER.find({ role: "user", isVerified: "true" }).select(
+      "-password -verificationToken -verificationTokenExpires"
+    ); // Exclude sensitive fields
+
+    if (!users || users.length === 0) {
+      return res.status(404).json({ message: "No users found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: users.length,
+      users,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   handleRegister,
   handleVerifyEmail,
@@ -279,4 +307,5 @@ module.exports = {
   handleForgotPassword,
   handleResetPassword,
   handleChangePassword,
+  getAllUsers,
 };

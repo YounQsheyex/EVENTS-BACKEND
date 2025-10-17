@@ -1,10 +1,24 @@
 const TicketInstance = require('../models/ticketIntanceSchema');
+const mongoose = require('mongoose');
 const crypto = require("crypto")
 
 // --- CRITICAL CHANGE: Accept 'session' as the fourth argument ---
 const generateTicketInstances = async (payment, ticket, user, session) => {
     const ticketsToCreate = [];
     const quantity = payment.quantity;
+
+        // Extract event ID with proper fallbacks
+    let eventId = payment.event?._id || payment.event || ticket.event?._id || ticket.event;
+    
+    // Convert to ObjectId if it's a string
+    if (typeof eventId === 'string') {
+        eventId = new mongoose.Types.ObjectId(eventId);
+    }
+    
+    if (!eventId) {
+        throw new Error('Event ID is required to generate ticket instances');
+    }
+
 
     // We do NOT use .create() inside the loop for performance/atomicity.
     for (let i = 0; i < quantity; i++) {
@@ -21,26 +35,31 @@ const generateTicketInstances = async (payment, ticket, user, session) => {
             ticketType: ticket._id,
             ticketNumber: ticketNumber,
             ticketToken: ticketToken,
+            event: eventId,
             attendeeName: `${payment.firstname} ${payment.lastname}`,
             attendeeEmail: user.email,
             status: 'valid',
-            eventName: ticket.eventName || ticket.event,
-            eventDate: ticket.eventDate,
-            eventLocation: ticket.location, // Assuming 'location' field exists on ticket model
+            
             metadata: {
                 purchaseDate: payment.paidAt,
                 price: ticket.price,
                 ticketType: ticket.type,
-                orderReference: payment.reference
+                orderReference: payment.reference,
+                eventName: ticket.event?.title || 'Event',
+                eventDate: ticket.event?.eventDate,
+                eventLocation: ticket.event?.location
             }
         };
 
+          console.log("Ticket instance data:", JSON.stringify(ticketInstanceData, null, 2));
         ticketsToCreate.push(ticketInstanceData);
+
     }
     
     // --- CRITICAL CHANGE: Use insertMany with the session ---
     const createdTicketInstances = await TicketInstance.insertMany(ticketsToCreate, { session });
     
+    console.log(`Successfully created ${createdTicketInstances.length} ticket instances`);
     return createdTicketInstances;
 };
 

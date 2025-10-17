@@ -287,6 +287,10 @@ const createEvents = async (req, res, next) => {
       !eventEnd ||
       !price ||
       !category ||
+<<<<<<< HEAD
+=======
+      // ticketTypes.length === 0 ||
+>>>>>>> e960e8b6aebf8bd7cac9093b73681e0b1e305cc6
       maxCapacity === undefined
     )
       return res.status(400).json({
