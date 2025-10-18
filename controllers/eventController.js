@@ -29,15 +29,10 @@ dayjs.extend(tz);
    ======================== */
 const getAllEvents = async (req, res, next) => {
   try {
-    const { page, limit } = req.query; // Get current page from query
-    const pg = parseInt(page) || 1; // default to 1
-
     // total count (for info / frontend)
     const eventsCount = await EVENTS.countDocuments();
-    const lmt = parseInt(limit) || 100; // items per page default to 100
-    const skip = (pg - 1) * lmt; // how many to skip
 
-    const events = await EVENTS.find({}).skip(skip).limit(lmt).lean();
+    const events = await EVENTS.find({}).lean();
 
     // If no events, return 404
     if (!events.length)
@@ -69,17 +64,10 @@ const getAllUpComingEvents = async (req, res, next) => {
     isDraft: "live",
   });
   try {
-    const { page, limit } = req.query; // Get current page from query
-    const pg = parseInt(page) || 1; // default to 1
-    const lmt = parseInt(limit) || 8; // items per page default to 8
-
-    const skip = (pg - 1) * lmt; // how many to skip
-    const events = await EVENTS.find({ status: "upcoming", isDraft: "live" })
-      // Skip logic for pagination
-      .skip(skip)
-      // Show only 8 per page
-      .limit(lmt)
-      .lean();
+    const events = await EVENTS.find({
+      status: "upcoming",
+      isDraft: "live",
+    }).lean();
 
     // If no upcoming events, return 404
     if (!events.length)

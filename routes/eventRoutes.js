@@ -37,7 +37,7 @@ router.get("/drafts", cache("All draft events: "), getDraftEvents);
 
 // Route: GET /api/events/live
 // Fetch all live events and cache the response
-router.get("/drafts", cache("All draft events: "), getLiveEvents);
+router.get("/live", cache("All live events: "), getLiveEvents);
 
 // Route: GET /api/events/upcoming?page=pageNumber
 // Fetch events with category = "upcoming" and cache the response with key "All upcoming events: params or query"
