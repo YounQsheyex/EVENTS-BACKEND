@@ -12,7 +12,7 @@ const tz = require("dayjs/plugin/timezone");
 const utc = require("dayjs/plugin/utc");
 
 // Import Event model (MongoDB schema for events)
-const { EVENTS, DRAFTED_EVENTS } = require("../models/eventSchema");
+const EVENTS = require("../models/eventSchema.js");
 
 const redisConfig = require("../helpers/redis");
 const geocodeLocation = require("../helpers/locator.js");
@@ -64,17 +64,20 @@ const getAllEvents = async (req, res, next) => {
    ========================= */
 const getAllUpComingEvents = async (req, res, next) => {
   // Count events that belong to "upcoming" status
-  const eventsCount = await EVENTS.countDocuments({ status: "upcoming" });
+  const eventsCount = await EVENTS.countDocuments({
+    status: "upcoming",
+    isDraft: "live",
+  });
   try {
     const { page, limit } = req.query; // Get current page from query
     const pg = parseInt(page) || 1; // default to 1
-    const lmt = parseInt(limit) || 8; // items per page default to 5
+    const lmt = parseInt(limit) || 8; // items per page default to 8
 
     const skip = (pg - 1) * lmt; // how many to skip
-    const events = await EVENTS.find({ status: "upcoming" })
+    const events = await EVENTS.find({ status: "upcoming", isDraft: "live" })
       // Skip logic for pagination
       .skip(skip)
-      // Show only 6 per page
+      // Show only 8 per page
       .limit(lmt)
       .lean();
 
@@ -114,27 +117,12 @@ const getEventById = async (req, res, next) => {
   }
 };
 
-const getDraftedEventById = async (req, res, next) => {
-  try {
-    const event = await DRAFTED_EVENTS.findById(req.params.id).lean();
-    if (!event)
-      return res
-        .status(404)
-        .json({ success: false, message: "Drafted Event not found." });
-
-    // Success: return event details
-    res.status(200).json({ success: true, event });
-  } catch (error) {
-    next(error);
-  }
-};
-
 /* ========================
    GET DRAFT EVENTS
    ======================= */
 const getDraftEvents = async (req, res, next) => {
   try {
-    const events = await DRAFTED_EVENTS.find({})
+    const events = await EVENTS.find({ isDraft: "draft" })
       .lean()
       .select("title id eventDate price status");
 
@@ -151,99 +139,21 @@ const getDraftEvents = async (req, res, next) => {
 };
 
 /* ========================
-    DRAFT EVENT
-    ======================= */
-const draftEvents = async (req, res, next) => {
+   GET DRAFT EVENTS
+   ======================= */
+const getLiveEvents = async (req, res, next) => {
   try {
-    // Extract data from request body
-    const {
-      title,
-      description,
-      highlight,
-      location,
-      eventDate,
-      eventStart,
-      eventEnd,
-      maxCapacity,
-      price,
-      category,
-      status,
-      ticketTypes,
-    } = req.body;
+    const events = await EVENTS.find({ isDraft: "live" })
+      .lean()
+      .select("title id eventDate price status");
 
-    await redisConfig.flushall("ASYNC");
-
-    // Parse request body
-    const eventDateObj = eventDate
-      ? dayjs(eventDate, "YYYY-MM-DD").toDate()
-      : eventDate;
-    const eventStartObj = eventStart
-      ? dayjs(eventStart, "YYYY-MM-DD HH:mm:ss").toDate()
-      : eventStart;
-
-    // Prevent duplicate events by checking unique combo
-    const existingEvent =
-      location && eventDateObj && eventStartObj
-        ? await EVENTS.findOne({
-            location,
-            eventDate: eventDateObj,
-            eventStart: eventStartObj,
-          })
-        : false;
-
-    if (existingEvent)
+    if (!events.length)
       return res
-        .status(400)
-        .json({ success: false, message: "Event already exists." });
+        .status(404)
+        .json({ success: false, message: "No live event found." });
 
-    // Event locus for map positions on the frontend map.
-    const eventlocus = location ? await geocodeLocation(location) : location;
-
-    let uploadImage;
-
-    /*
-    if (req.files.file.tempFilePath) {
-      // Upload image to Cloudinary
-      uploadImage = await cloudinary.uploader.upload(
-        req.files.file.tempFilePath,
-        {
-          folder: "Eventra/events",
-          unique_filename: false,
-          use_filename: true,
-        }
-      );
-    }
-*/
-
-    const eventObj = {
-      title,
-      description,
-      highlight,
-      location,
-      availableSeats: maxCapacity,
-      eventDate: dayjs.tz(eventDate, "Africa/Lagos").toDate(),
-      eventStart: dayjs.tz(eventStart, "Africa/Lagos").toDate(),
-      eventEnd: dayjs.tz(eventEnd, "Africa/Lagos").toDate(),
-      eventImage: uploadImage ? uploadImage.secure_url : uploadImage, // Store Cloudinary image URL
-      maxCapacity,
-      price,
-      category,
-      status,
-      ticketTypes: ticketTypes ? [...mongoose.Types.ObjectId(ticketTypes)] : [],
-    };
-
-    if (eventlocus) {
-      eventObj["coordinates"] = eventlocus;
-    }
-
-    // Create new event document inside a transaction
-    const event = await DRAFTED_EVENTS.create(eventObj);
-
-    res.status(200).json({
-      success: true,
-      message: "Event created in draft successfully",
-      event,
-    });
+    // Success: return event details
+    res.status(200).json({ success: true, events });
   } catch (error) {
     next(error);
   }
@@ -272,7 +182,7 @@ const createEvents = async (req, res, next) => {
       status,
       ticketTypes,
       eventImage,
-    } = req.body.id ? await DRAFTED_EVENTS.findById(req.body.id) : req.body;
+    } = req.params.id ? await EVENTS.findById(req.params.id) : req.body;
 
     await redisConfig.flushall("ASYNC");
 
@@ -287,26 +197,20 @@ const createEvents = async (req, res, next) => {
       !eventEnd ||
       !price ||
       !category ||
-<<<<<<< HEAD
-=======
-      // ticketTypes.length === 0 ||
->>>>>>> e960e8b6aebf8bd7cac9093b73681e0b1e305cc6
       maxCapacity === undefined
     )
-      return res.status(400).json({
-        success: false,
-        message: "All fields are required.",
-      });
-
-    // Ensure max capacity is at least 2
-    if (maxCapacity < 2)
-      return res.status(400).json({
-        success: false,
-        message: "Max capacity must be at least 2.",
-      });
+      if (!req.url.includes("draft"))
+        return res.status(400).json({
+          success: false,
+          message: "All fields are required.",
+        });
 
     // Ensure event image is uploaded
-    if (!req.files?.file.tempFilePath && !eventImage)
+    if (
+      !req.files?.file.tempFilePath &&
+      !eventImage &&
+      req.url.includes("draft")
+    )
       return res.status(400).json({
         success: false,
         message: "Event image is required but no image is provided.",
@@ -317,13 +221,16 @@ const createEvents = async (req, res, next) => {
     const eventStartObj = dayjs(eventStart, "YYYY-MM-DD HH:mm:ss").toDate();
 
     // Prevent duplicate events by checking unique combo
-    const existingEvent = await EVENTS.findOne({
-      location,
-      eventDate: eventDateObj,
-      eventStart: eventStartObj,
-    });
+    const existingEvent =
+      location && eventDateObj && eventStartObj
+        ? await EVENTS.findOne({
+            location,
+            eventDate: eventDateObj,
+            eventStart: eventStartObj,
+          })
+        : false;
 
-    if (existingEvent)
+    if (existingEvent && req.url.includes("drafts"))
       return res
         .status(400)
         .json({ success: false, message: "Event already exists." });
@@ -332,13 +239,19 @@ const createEvents = async (req, res, next) => {
     const eventlocus = await geocodeLocation(location);
 
     // Upload image to Cloudinary
-    const uploadImage = eventImage
-      ? eventImage
-      : await cloudinary.uploader.upload(req.files.file.tempFilePath, {
+    let uploadImage = eventImage;
+
+    if (!uploadImage && !req.files.file.tempFilePath) {
+      // Upload image to Cloudinary
+      uploadImage = await cloudinary.uploader.upload(
+        req.files.file.tempFilePath,
+        {
           folder: "Eventra/events",
           unique_filename: false,
           use_filename: true,
-        });
+        }
+      );
+    }
 
     // E.g:==> Create a date for "2025-09-21 15:15" in Africa/Lagos timezone
     //  - "2025-09-21 15:15" is just a string (local representation)
@@ -361,7 +274,7 @@ const createEvents = async (req, res, next) => {
       price,
       category,
       status,
-      ticketTypes: ticketTypes ? ticketTypes : [],
+      ticketTypes: ticketTypes ? [ticketTypes] : [],
     };
 
     if (eventlocus) {
@@ -369,10 +282,12 @@ const createEvents = async (req, res, next) => {
     }
 
     // Create new event document inside a transaction
-    const event = await EVENTS.create([eventObj], { session });
-
-    // Remove the created event from DraftedEvents if it exists there and id is provided as a req.body
-    if (req.body.id) await DRAFTED_EVENTS.findByIdAndDelete(req.body.id);
+    const event = !req.params.id
+      ? await EVENTS.create([eventObj], { session })
+      : await EVENTS.findByIdAndUpdate(req.params.id, {
+          isDraft: "live",
+          ...eventObj,
+        });
 
     // Commit transaction (make changes permanent)
     await session.commitTransaction();
@@ -431,6 +346,8 @@ const filterEvent = async (req, res, next) => {
         };
       }
     }
+
+    filterObj.isDraft = "live";
 
     // Fetch events based on processed query
     let events = await EVENTS.find(filterObj)
@@ -532,9 +449,7 @@ const updateEvent = async (req, res, next) => {
     const refined = await refinedBody();
 
     // Update event and return only its title
-    const Model = req.url.includes("drafts") ? DRAFTED_EVENTS : EVENTS;
-
-    const event = await Model.findByIdAndUpdate(
+    const event = await EVENTS.findByIdAndUpdate(
       req.params.id,
       { $set: refined },
       { new: true }
@@ -626,50 +541,17 @@ const deleteEvent = async (req, res, next) => {
 };
 
 /* ========================
-   DELETE DRAFTED EVENT
-   ======================== */
-const deleteDraftedEvent = async (req, res, next) => {
-  try {
-    // Ensure event ID is provided
-    if (!req.params.id)
-      return res.status(400).json({
-        success: false,
-        message: "Event id is required.",
-      });
-
-    // Permanently delete drafted event
-    const event = await DRAFTED_EVENTS.findByIdAndDelete(req.params.id);
-
-    if (!event)
-      return res.status(404).json({
-        success: false,
-        message: "Event not found!",
-      });
-
-    await redisConfig.flushall("ASYNC");
-
-    res
-      .status(200)
-      .json({ success: true, message: "Event deleted successfully." });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/* ========================
    EXPORT CONTROLLERS
    ======================== */
 module.exports = {
   getAllEvents,
   getAllUpComingEvents,
   getEventById,
-  getDraftedEventById,
   getDraftEvents,
+  getLiveEvents,
   createEvents,
-  draftEvents,
   filterEvent,
   updateEvent,
   cancelEvent,
   deleteEvent,
-  deleteDraftedEvent,
 };
