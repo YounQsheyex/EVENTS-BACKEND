@@ -23,6 +23,7 @@ const webhookRoutes = require("./routes/webhookRoute");
 const errorMiddleware = require("./middleware/error");
 // Import arcjet middleware to handle rate limiting throughout the API.
 const arcjetMiddleware = require("./middleware/arjectMiddleware");
+const redisConfig = require("./helpers/redis");
 
 // middleware
 app.use(express.json());
@@ -75,6 +76,7 @@ app.use(errorMiddleware);
 
 const startServer = async () => {
   try {
+    redisConfig.flushall("ASYNC");
     await mongoose.connect(process.env.MONGO_URL, { dbName: "EVENTS-DB" });
     app.listen(PORT, () => {
       console.log(`App Running on PORT ${PORT}`);
