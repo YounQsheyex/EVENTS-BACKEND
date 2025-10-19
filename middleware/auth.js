@@ -76,7 +76,24 @@ const isAdmin = async (req, res, next) => {
   }
 };
 
+const isSuperAdmin = async (req, res, next) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(403).json({ message: "Unthorized" });
+    }
+    if (user.role !== "superAdmin") {
+      return res
+        .status(403)
+        .json({ message: "Forbidden: Only Super Admins Allowed" });
+    }
+    next();
+  } catch (error) {
+    res.status(401).json({ message: "Unauthorized" });
+  }
+};
+
 /* ========================
    EXPORT MIDDLEWARES
    ======================== */
-module.exports = { isUser, isAdmin };
+module.exports = { isUser, isAdmin, isSuperAdmin };

@@ -4,6 +4,7 @@ const {
   resetEmailTemplate,
   PaymentComfirmationEmail,
   verifyItYouEmail,
+  createAdminEmail,
 } = require("./emailtemplate");
 const sgMail = require("@sendgrid/mail");
 
@@ -60,6 +61,16 @@ const sendWelcomeEmail = async ({ firstname, clientUrl, email }) => {
   });
 };
 
+const sendAdminEmail = async ({ firstname, email, password }) => {
+  const subject = "Your Admin Account Details";
+  const html = createAdminEmail(firstname, email, password);
+
+  sendEmail({
+    to: email,
+    subject,
+    html,
+  });
+};
 const sendResetEmail = async ({ firstname, clientUrl, email }) => {
   const subject = "Password Reset";
   const html = resetEmailTemplate(firstname, clientUrl);
@@ -133,4 +144,5 @@ module.exports = {
   sendResetEmail,
   sendPaymentConfirmationEmail,
   sendVerifyPaymentlink,
+  sendAdminEmail,
 };
