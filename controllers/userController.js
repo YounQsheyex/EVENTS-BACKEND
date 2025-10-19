@@ -1,8 +1,13 @@
 const USER = require("../models/usersSchema");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const generateToken = require("../helpers/generateToken");
-const { sendWelcomeEmail, sendResetEmail } = require("../emails/sendemails");
+const {
+  sendWelcomeEmail,
+  sendResetEmail,
+  sendAdminEmail,
+} = require("../emails/sendemails");
 const { use } = require("passport");
 
 // registration controller
@@ -247,7 +252,7 @@ const handleChangePassword = async (req, res) => {
   if (!oldPassword || !newPassword) {
     return res
       .status(400)
-      .json({ message: "Please enter a old and new password" });
+      .json({ message: "Please enter  old and new password" });
   }
 
   try {
@@ -299,6 +304,59 @@ const getAllUsers = async (req, res) => {
   }
 };
 
+const createAdmin = async (req, res) => {
+  try {
+    const superAdminId = req.user._id; // this assumes JWT middleware populates req.user
+    const superAdmin = await USER.findById(superAdminId);
+
+    if (!superAdmin || superAdmin.role !== "superAdmin") {
+      return res
+        .status(403)
+        .json({ message: "Access denied. Not a super admin." });
+    }
+
+    const { firstname, lastname, email, phoneNumber } = req.body;
+
+    // Check if email already exists
+    const existingUser = await USER.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "Email already exists." });
+    }
+
+    // Generate random password
+    const randomPassword = crypto.randomBytes(6).toString("hex"); // e.g., 'f3a9b1c0d2e4'
+    const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+    // Create admin user
+    const admin = new USER({
+      firstname,
+      lastname,
+      email,
+      phoneNumber,
+      password: hashedPassword,
+      provider: "local",
+      role: "admin",
+      isVerified: true, // Admin created by Super Admin is automatically verified
+    });
+
+    await admin.save();
+    await sendAdminEmail({
+      firstname: admin.firstname,
+      email: admin.email,
+      password: randomPassword,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message:
+        "Admin account created successfully and credentials sent via email.",
+    });
+  } catch (error) {
+    console.error("Error creating admin:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   handleRegister,
   handleVerifyEmail,
@@ -308,4 +366,5 @@ module.exports = {
   handleResetPassword,
   handleChangePassword,
   getAllUsers,
+  createAdmin,
 };
