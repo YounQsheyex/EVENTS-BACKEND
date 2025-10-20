@@ -19,7 +19,7 @@ router.post("/resend-email", resendVerificationEmail);
 router.post("/forgot-password", handleForgotPassword);
 router.post("/reset-password", handleResetPassword);
 router.post("/change-password/:id", isUser, handleChangePassword);
-router.get("/all-users", isUser, isAdmin, isSuperAdmin, getAllUsers);
+router.get("/all-users", isUser, isAdmin, getAllUsers);
 router.post("/create-admin", isUser, isSuperAdmin, createAdmin);
 
 module.exports = router;
