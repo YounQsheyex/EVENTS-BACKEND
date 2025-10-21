@@ -52,42 +52,34 @@ router.get("/upcoming", cache("All upcoming events: "), getAllUpComingEvents);
 router.get("/filterby", cache("Filter event: "), filterEvent);
 
 // ----------------------------------------------------------------------
-// GET ROUTES (PARAMETERIZED)
-// Define routes with parameters like :id LAST
-// ----------------------------------------------------------------------
-
-// Route: GET /api/events/:id
-// Fetch event by ID and cache the response. This MUST be the last GET route.
-router.get("/:id", cache("Event details: "), getEventById);
-
-// ----------------------------------------------------------------------
 // POST / PATCH / DELETE ROUTES (Order is less critical here, but good practice)
 // ----------------------------------------------------------------------
 
 // Route: POST /api/events/draft
 // Draft new event (admin only)
-router.post("/drafts", isUser, isAdmin, createEvents);
+router.post("/draft", isUser, isAdmin, createEvents);
 
+// ----------------------------------------------------------------------
 // Route: POST /api/events/create
 // Create new event (admin only)
 router.post("/create/:id", isUser, isAdmin, createEvents);
 
-// Route: POST /api/events/update/drafts/:id
-// Update drafted event by ID (admin only)
-router.patch("/update/drafts/:id", isUser, isAdmin, updateEvent);
-
+// ----------------------------------------------------------------------
 // Route: POST /api/events/update/:id
 // Update event by ID (admin only)
 router.patch("/update/:id", isUser, isAdmin, updateEvent);
 
+// ----------------------------------------------------------------------
 // Route: POST /api/events/cancel/:id
 // Cancel an event by ID (admin only)
 router.patch("/cancel/:id", isUser, isAdmin, cancelEvent);
 
+// ----------------------------------------------------------------------
 // Route: DELETE /api/events/delete/:id
 // Delete event by ID (admin only)
 router.delete("/delete/:id", isUser, isAdmin, deleteEvent);
 
+// ----------------------------------------------------------------------
 // Route: GET /api/events/:id
 // Fetch event by ID and cache the response
 router.get("/:id", cache("Event details: "), getEventById);

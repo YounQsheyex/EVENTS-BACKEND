@@ -229,7 +229,7 @@ const createEvents = async (req, res, next) => {
     // Upload image to Cloudinary
     let uploadImage = eventImage;
 
-    if (!uploadImage && !req.files.file.tempFilePath) {
+    if (!uploadImage && req.files.file.tempFilePath) {
       // Upload image to Cloudinary
       uploadImage = await cloudinary.uploader.upload(
         req.files.file.tempFilePath,
