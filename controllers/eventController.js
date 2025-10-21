@@ -170,6 +170,7 @@ const createEvents = async (req, res, next) => {
       status,
       ticketTypes,
       eventImage,
+      perks,
     } = req.params.id ? await EVENTS.findById(req.params.id) : req.body;
 
     await redisConfig.flushall("ASYNC");
@@ -185,7 +186,8 @@ const createEvents = async (req, res, next) => {
       !eventEnd ||
       !price ||
       !category ||
-      maxCapacity === undefined
+      maxCapacity === undefined ||
+      !perks
     )
       if (!req.url.includes("draft"))
         return res.status(400).json({
@@ -263,6 +265,7 @@ const createEvents = async (req, res, next) => {
       category,
       status,
       ticketTypes: ticketTypes ? [ticketTypes] : [],
+      perks: perks ? [perks] : [],
     };
 
     if (eventlocus) {
@@ -309,28 +312,30 @@ const filterEvent = async (req, res, next) => {
           .replaceAll("%20", " ")
           .replaceAll("+", " ");
         filterObj[filter] = query[filter];
-      } else if (filter === "price" || filter === "maxcapacity") {
+      } else if (filter === "price") {
         filterObj["price"] = query[filter] === "paid" ? { $gte: 1 } : 0;
+      } else if (filter === "maxcapacity") {
+        filterObj["maxCapacity"] = { $gte: query[filter] };
       } else if (filter === "seats") {
         filterObj["availableSeats"] =
           query[filter] === "available" ? { $gte: 1 } : 0;
       } else if (filter === "date") {
-        filterObj["eventDate"] = new Date(query[filter]);
+        filterObj["eventDate"] = dayjs(query[filter], "YYYY-MM-DD").toDate();
       } else if (
         Object.keys(query).includes("end") &&
         Object.keys(query).includes("start")
       ) {
         filterObj["eventDate"] = {
-          $lte: new Date(query["end"]).toISOString(),
-          $gte: new Date(query["start"]).toISOString(),
+          $lte: dayjs(query["end"], "YYYY-MM-DD").toDate(),
+          $gte: dayjs(query["start"], "YYYY-MM-DD").toDate(),
         };
       } else if (filter === "start") {
         filterObj["eventDate"] = {
-          $gte: new Date(query[filter]).toISOString(),
+          $gte: dayjs(query["start"], "YYYY-MM-DD").toDate(),
         };
       } else if (filter === "end") {
         filterObj["eventDate"] = {
-          $lte: new Date(query[filter]).toISOString(),
+          $lte: dayjs(query["end"], "YYYY-MM-DD").toDate(),
         };
       }
     }
@@ -427,6 +432,11 @@ const updateEvent = async (req, res, next) => {
             use_filename: true,
           }
         );
+
+        body.ticketTypes
+          ? (body.ticketTypes = [body.ticketTypes])
+          : body.ticketTypes;
+        body.perks ? (body.perks = [body.perks]) : body.perks;
 
         body.eventImage = uploadImage.secure_url;
       }

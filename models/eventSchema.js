@@ -124,6 +124,12 @@ const eventSchema = new mongoose.Schema(
       enum: ["draft", "live"],
       default: "draft",
     },
+
+    perks: [
+      {
+        type: String,
+      },
+    ],
   },
   {
     // Add createdAt & updatedAt timestamps
