@@ -61,12 +61,12 @@ const getAllUpComingEvents = async (req, res, next) => {
   // Count events that belong to "upcoming" status
   const eventsCount = await EVENTS.countDocuments({
     status: "upcoming",
-    isDraft: "live",
+    published: "live",
   });
   try {
     const events = await EVENTS.find({
       status: "upcoming",
-      isDraft: "live",
+      published: "live",
     }).lean();
 
     // If no upcoming events, return 404
@@ -110,7 +110,7 @@ const getEventById = async (req, res, next) => {
    ======================= */
 const getDraftEvents = async (req, res, next) => {
   try {
-    const events = await EVENTS.find({ isDraft: "draft" })
+    const events = await EVENTS.find({ published: "draft" })
       .lean()
       .select("title id eventDate price status");
 
@@ -131,7 +131,7 @@ const getDraftEvents = async (req, res, next) => {
    ======================= */
 const getLiveEvents = async (req, res, next) => {
   try {
-    const events = await EVENTS.find({ isDraft: "live" })
+    const events = await EVENTS.find({ published: "live" })
       .lean()
       .select("title id eventDate price status");
 
@@ -276,7 +276,7 @@ const createEvents = async (req, res, next) => {
     const event = !req.params.id
       ? await EVENTS.create([eventObj], { session })
       : await EVENTS.findByIdAndUpdate(req.params.id, {
-          isDraft: "live",
+          published: "live",
           ...eventObj,
         });
 
@@ -340,7 +340,7 @@ const filterEvent = async (req, res, next) => {
       }
     }
 
-    filterObj.isDraft = "live";
+    filterObj.published = "live";
 
     // Fetch events based on processed query
     let events = await EVENTS.find(filterObj)
