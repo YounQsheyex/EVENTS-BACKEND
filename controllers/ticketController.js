@@ -1,94 +1,134 @@
 const express = require("express");
-const { EVENTS } = require("../models/eventSchema.js");
+const mongoose = require("mongoose")
+const EVENTS = require("../models/eventSchema.js");
 const Ticket = require("../models/ticketSchema.js");
 
 // Create different types of tickets for a single event
 const handleCreateTicket = async (req, res, next) => {
-  const { name, type, quantity, maxOrder, price, status } = req.body;
-  const { eventId } = req.params; // Validation
+  const { name, type, quantity, maxOrder, price, status } = req.body;
+  const { eventId } = req.params;
 
-  if (!name || !eventId || !type || !quantity || !price || !maxOrder) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "Please provide all necessary fields: name, type, quantity, maxOrder, price, and status",
-    });
-  }
+  // --- 1. Core Input Validation & Parsing ---
+  if (!name || !eventId || !type || !quantity || !price || !maxOrder) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Please provide all necessary fields: name, type, quantity, maxOrder, price, and status",
+    });
+  }
+  
+  // Parse required numeric inputs and set status default
+  const requestedQuantity = parseInt(quantity, 10);
+  const ticketStatus = status || "available";
 
-  if (!status) updateFields.status = "available"; // Validate ticket type matches price
-
-  if (type === "free" && price > 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Free tickets cannot have a price greater than 0",
-    });
-  }
-
-  if (type === "paid" && price <= 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Paid tickets must have a price greater than 0",
-    });
-  }
-
-  try {
-    // Check if event exists
-     const event = await EVENTS.findById(eventId).select('capacity');
-        if (!event) {
-            return res.status(404).json({
-                success: false,
-                message:
-                    "Event not found. Cannot create tickets for non-existent event.",
-            });
-          }
-         // --- 3. Capacity Check Logic: Does the new quantity exceed event capacity? ---
-        // Find the sum of quantities of ALL existing tickets for this event
-        const existingTicketsAggregate = await ticketSchema.aggregate([
-            { $match: { event: new mongoose.Types.ObjectId(eventId) } },
-            { $group: { _id: null, totalTickets: { $sum: "$quantity" } } }
-        ]);
-
-        const currentTotalTickets = existingTicketsAggregate.length > 0 ? existingTicketsAggregate[0].totalTickets : 0;
-        const potentialTotalTickets = currentTotalTickets + requestedQuantity;
-
-        // Compare potential total with event capacity
-        if (potentialTotalTickets > event.capacity) {
-            return res.status(400).json({
-                success: false,
-                message: `The requested quantity (${requestedQuantity}) exceeds the remaining event capacity. Current total tickets for this event: ${currentTotalTickets}. Event capacity: ${event.capacity}.`,
-            });
-        }
-
-
-       // Create ticket
-    const ticket = await Ticket.create({
-      name,
-      type,
-      quantity,
-      maxOrder,
-      price,
-      status,
-      event: eventId,
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: "Ticket created successfully.",
-      data: ticket,
-    });
-  } catch (error) {
-    // Handle duplicate ticket name for the same event via the MongoDB unique index error
-    console.error("MongoDB Error on Ticket Creation:", error);
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message:
-          "A ticket with this name already exists for this event. Please use a different name or update the existing ticket.",
+  if (isNaN(requestedQuantity) || requestedQuantity <= 0) {
+      return res.status(400).json({
+          success: false,
+          message: "Quantity must be a positive number.",
       });
+  }
+
+  // Validate ticket type matches price
+  if (type === "free" && price > 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Free tickets cannot have a price greater than 0",
+    });
+  }
+
+  if (type === "paid" && price <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Paid tickets must have a price greater than 0",
+    });
+  }
+
+  try {
+    // Check if event exists and get capacity (Using 'capacity' field for consistency)
+        const event = await EVENTS.findById(eventId).select('maxCapacity availableSeats');
+    
+    if (!event) {
+        return res.status(404).json({
+            success: false,
+            message: "Event not found. Cannot create tickets for non-existent event.",
+        });
+    }
+    
+    // FIX: Determine which capacity field exists
+    const eventCapacity = event.maxCapacity;
+    
+    if (!eventCapacity || eventCapacity <= 0) {
+        return res.status(400).json({
+            success: false,
+            message: "Event capacity is not set or invalid.",
+        });
+    }
+    
+    console.log("Event Capacity:", eventCapacity);
+    console.log("Requested Quantity:", requestedQuantity);
+         
+    // --- 3. FIXED Capacity Check Logic ---
+    // Find the sum of quantities of ALL existing tickets for this event
+    const existingTicketsAggregate = await Ticket.aggregate([
+        { $match: { event: new mongoose.Types.ObjectId(eventId) } },
+        { $group: { _id: null, totalTickets: { $sum: "$quantity" } } }
+    ]);
+
+    const currentTotalTickets = existingTicketsAggregate.length > 0 
+        ? existingTicketsAggregate[0].totalTickets 
+        : 0;
+    
+    const potentialTotalTickets = currentTotalTickets + requestedQuantity;
+
+    console.log("Current Total Tickets:", currentTotalTickets);
+    console.log("Potential Total Tickets:", potentialTotalTickets);
+
+    // FIX: Compare potential total with event capacity
+    if (potentialTotalTickets > eventCapacity) {
+        return res.status(400).json({
+            success: false,
+            message: `Cannot create ticket. The requested quantity (${requestedQuantity}) would exceed the event capacity.`,
+            details: {
+                requestedQuantity: requestedQuantity,
+                currentTotalTickets: currentTotalTickets,
+                potentialTotalTickets: potentialTotalTickets,
+                eventCapacity: eventCapacity,
+                remainingCapacity: eventCapacity - currentTotalTickets
+            }
+        });
     }
 
-    next(error);
-  }
+
+
+       // Create ticket
+    const ticket = await Ticket.create({
+      name,
+      type,
+      quantity: requestedQuantity, // Use the parsed integer value
+      maxOrder,
+      price,
+      status: ticketStatus, // Use the resolved status
+      event: eventId,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Ticket created successfully.",
+      data: ticket,
+    });
+  } catch (error) {
+    // Handle duplicate ticket name for the same event via the MongoDB unique index error
+    console.error("MongoDB Error on Ticket Creation:", error);
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "A ticket with this name already exists for this event. Please use a different name or update the existing ticket.",
+      });
+    }
+
+    next(error);
+  }
 };
 
 // to update ticket details
