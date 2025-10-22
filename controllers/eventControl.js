@@ -40,40 +40,17 @@ const createEvents = async (req, res) => {
         .status(403)
         .json({ message: "Access denied. Only admins can create events." });
     }
-    // duplicate events
-    // Normalize dates for comparison (ignore milliseconds/timezones)
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
 
-    // Find duplicate event
-    // Normalize for comparison
-    const normalizedTitle = title.trim();
-    const normalizedAddress = address.trim();
-    const normalizedStartTime = startTime.trim();
-    const normalizedEndTime = endTime.trim();
-
-    const normalizedStartDate = new Date(startDate);
-    const normalizedEndDate = new Date(endDate);
-    normalizedStartDate.setHours(0, 0, 0, 0);
-    normalizedEndDate.setHours(0, 0, 0, 0);
-
-    // ✅ Check duplicate with case-insensitive regex
+    //  Strict duplicate check — must match ALL three fields
     const duplicateEvent = await EVENTS.findOne({
-      title: { $regex: new RegExp(`^${normalizedTitle}$`, "i") }, // case-insensitive
-      address: { $regex: new RegExp(`^${normalizedAddress}$`, "i") }, // case-insensitive
-      startDate: normalizedStartDate,
-      endDate: normalizedEndDate,
-      startTime: { $regex: new RegExp(`^${normalizedStartTime}$`, "i") }, // case-insensitive
-      endTime: { $regex: new RegExp(`^${normalizedEndTime}$`, "i") }, // case-insensitive
+      $and: [{ address }, { startDate }, { startTime }],
     });
 
     if (duplicateEvent) {
       return res.status(400).json({
         success: false,
         message:
-          "An event with the same title, address, date, and time already exists.",
+          "An event with the same venue, date, and time already exists. Please adjust the schedule or location.",
       });
     }
 
