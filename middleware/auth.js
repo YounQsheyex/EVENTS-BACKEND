@@ -75,7 +75,7 @@ const isAdmin = async (req, res, next) => {
     next(error);
   }
 };
-
+// for superadmins only
 const isSuperAdmin = async (req, res, next) => {
   try {
     const user = req.user;
