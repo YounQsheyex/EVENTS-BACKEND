@@ -334,7 +334,7 @@ const handleAllTransactions = async (req, res, next) => {
           select: "title eventDate",
         },
       })
-      .populate("ticketInstances", "ticketToken ticketNumber")
+      .populate("ticketInstances", "ticketToken ticketNumber qrCode")
       .sort({ createdAt: -1 }); // Most recent first
 
     res.status(200).json({
@@ -370,7 +370,7 @@ const handleUserTicket = async (req, res, next) => {
         select: "quantity amount reference paidAt", // Add payment details including quantity
       })
 
-      .select("ticketNumber ticketToken status attendeeName") // Select relevant fields
+      .select("ticketNumber ticketToken status attendeeName qrCode") // Select relevant fields
       .sort({ createdAt: -1 });
 
     const formattedTickets = userTickets.map((ticket) => ({
@@ -379,8 +379,10 @@ const handleUserTicket = async (req, res, next) => {
       ticketToken: ticket.ticketToken,
       status: ticket.status,
       attendeeName: ticket.attendeeName,
+      qrCode: ticket.qrCode,
       attendeeEmail: ticket.attendeeEmail,
       createdAt: ticket.createdAt,
+     
 
       // Event details from populated data
       event: ticket.ticketType?.event
@@ -429,9 +431,91 @@ const handleUserTicket = async (req, res, next) => {
   }
 };
 
+const getSalesOverview = async (req, res, next) => {
+    try {
+        // Calculate the date 30 days ago
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+
+        // --- 1. Aggregate Total Revenue from Payments (Last 30 Days) ---
+        const revenueResult = await paymentSchema.aggregate([
+            {
+                $match: {
+                    status: "success", // Only successful payments
+                    createdAt: { $gte: thirtyDaysAgo } // Filter by date (last 30 days)
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalRevenue: { $sum: "$amount" } // Sum the amount field
+                }
+            }
+        ]);
+
+        const totalRevenue = revenueResult.length > 0 ? revenueResult[0].totalRevenue : 0;
+
+        // --- 2. Aggregate Total Tickets Sold (Last 30 Days) ---
+        const ticketsResult = await ticketInstanceSchema.aggregate([
+            {
+                $match: {
+                    createdAt: { $gte: thirtyDaysAgo } // Filter by date (last 30 days)
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalTicketsSold: { $sum: 1 } // Simply counts every document
+                }
+            }
+        ]);
+
+        const totalTicketsSold = ticketsResult.length > 0 ? ticketsResult[0].totalTicketsSold : 0;
+
+        // --- 3. Aggregate Total Tickets Used (Last 30 Days) ---
+        const usedTicketsResult = await ticketInstanceSchema.aggregate([
+            {
+                $match: {
+                    status: "used", // Only used tickets
+                    createdAt: { $gte: thirtyDaysAgo } // Filter by date (last 30 days)
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalTicketsUsed: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const totalTicketsUsed = usedTicketsResult.length > 0 ? usedTicketsResult[0].totalTicketsUsed : 0;
+
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                totalRevenue: totalRevenue,
+                totalTicketsSold: totalTicketsSold,
+                totalTicketsUsed: totalTicketsUsed, // Useful extra metric
+            }
+        });
+
+    } catch (error) {
+        console.error("Sales reporting error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error fetching sales overview.",
+            error: error.message,
+        });
+        next(error);
+    }
+};
+
 module.exports = {
   handlePaymentInitialization,
   handlePaymentVerification,
   handleAllTransactions,
   handleUserTicket,
+  getSalesOverview, 
 };

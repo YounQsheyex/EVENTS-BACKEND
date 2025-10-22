@@ -33,14 +33,34 @@ const handleCreateTicket = async (req, res, next) => {
 
   try {
     // Check if event exists
-    const event = await EVENTS.findById(eventId);
-    if (!event) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Event not found. Cannot create tickets for non-existent event.",
-      });
-    } // Create ticket
+     const event = await EVENTS.findById(eventId).select('capacity');
+        if (!event) {
+            return res.status(404).json({
+                success: false,
+                message:
+                    "Event not found. Cannot create tickets for non-existent event.",
+            });
+          }
+         // --- 3. Capacity Check Logic: Does the new quantity exceed event capacity? ---
+        // Find the sum of quantities of ALL existing tickets for this event
+        const existingTicketsAggregate = await ticketSchema.aggregate([
+            { $match: { event: new mongoose.Types.ObjectId(eventId) } },
+            { $group: { _id: null, totalTickets: { $sum: "$quantity" } } }
+        ]);
+
+        const currentTotalTickets = existingTicketsAggregate.length > 0 ? existingTicketsAggregate[0].totalTickets : 0;
+        const potentialTotalTickets = currentTotalTickets + requestedQuantity;
+
+        // Compare potential total with event capacity
+        if (potentialTotalTickets > event.capacity) {
+            return res.status(400).json({
+                success: false,
+                message: `The requested quantity (${requestedQuantity}) exceeds the remaining event capacity. Current total tickets for this event: ${currentTotalTickets}. Event capacity: ${event.capacity}.`,
+            });
+        }
+
+
+       // Create ticket
     const ticket = await Ticket.create({
       name,
       type,

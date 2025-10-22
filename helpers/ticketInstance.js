@@ -1,4 +1,5 @@
 const TicketInstance = require('../models/ticketIntanceSchema');
+const generateQrCode = require('../helpers/qrCode');
 const mongoose = require('mongoose');
 const crypto = require("crypto")
 
@@ -28,6 +29,13 @@ const generateTicketInstances = async (payment, ticket, user, session) => {
         
         // Generate secure token for verification (no change needed here)
         const ticketToken = generateSecureToken();
+
+
+         const qrCodeData = await generateQrCode({
+        event: payment.event || ticket.event,   // the event ID or name
+        ticketNumber: ticketNumber,
+        token: ticketToken
+    });
         
         const ticketInstanceData = {
             payment: payment._id,
@@ -39,7 +47,7 @@ const generateTicketInstances = async (payment, ticket, user, session) => {
             attendeeName: `${payment.firstname} ${payment.lastname}`,
             attendeeEmail: user.email,
             status: 'valid',
-            
+            qrCode: qrCodeData,
             metadata: {
                 purchaseDate: payment.paidAt,
                 price: ticket.price,
