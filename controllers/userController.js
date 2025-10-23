@@ -112,7 +112,7 @@ const userLogin = async (req, res) => {
     const token = jwt.sign(
       { userId: user._id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "1 days" }
     );
     res.status(200).json({
       message: "Welcome To EVENTRA",
@@ -122,6 +122,8 @@ const userLogin = async (req, res) => {
         userId: user._id,
         firstname: user.firstname,
         lastname: user.lastname,
+        role: user.role,
+        phoneNumber: user.phoneNumber,
       },
     });
   } catch (error) {

@@ -64,7 +64,7 @@ const isAdmin = async (req, res, next) => {
       return res.status(403).json({ success: true, message: "Unauthorized" });
 
     // If role is not admin → reject
-    if (user.role !== "admin")
+    if (user.role !== "admin" && user.role !== "superAdmin")
       return res
         .status(403)
         .json({ success: false, message: "Forbidden: for admins only." });
@@ -75,7 +75,7 @@ const isAdmin = async (req, res, next) => {
     next(error);
   }
 };
-
+// for superadmins only
 const isSuperAdmin = async (req, res, next) => {
   try {
     const user = req.user;
