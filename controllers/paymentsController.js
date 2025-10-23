@@ -352,17 +352,43 @@ const handleAllTransactions = async (req, res, next) => {
 const handleUserTicket = async (req, res, next) => {
   // Robustly extract user ID from req.user (which holds the Mongoose document)
   const { _id: userId } = req.user;
+  // Extract query parameters for search and filtering
+  const { status, search } = req.query;
 
   try {
+    // Start building the query object with the mandatory user ID filter
+    let findQuery = { user: userId };
+
+    // 1. Add Status Filtering: Allows querying like /api/tickets?status=used
+    if (status) {
+      findQuery.status = status;
+    }
+
+    // 2. Add Text Search Filtering: Allows querying like /api/tickets?search=VIP
+    if (search) {
+      // Case-insensitive regex search
+      const searchRegex = new RegExp(search, 'i');
+      
+      // Use $or to search across fields directly on the TicketInstance document
+      findQuery.$or = [
+        // Search by ticket number
+        { ticketNumber: { $regex: searchRegex } },
+        // Search by ticket token
+        { ticketToken: { $regex: searchRegex } },
+        // Search by attendee name
+        { attendeeName: { $regex: searchRegex } }
+      ];
+    }
+
     // Assuming your TicketInstance schema is named 'ticketInstanceSchema'
     const userTickets = await ticketInstanceSchema
-      .find({ user: userId }) // UPDATED: Nested population to get event details (title, eventDate)
+      .find(findQuery) // Use the dynamic query object
       .populate({
         path: "ticketType",
         select: "type name price quantity event",
         populate: {
           path: "event",
-          select: "title eventDate location category", // Populate event title and date
+          select: "title eventDate location category eventStart eventEnd eventImage", // Select all needed event fields
         },
       })
       .populate({
@@ -370,7 +396,7 @@ const handleUserTicket = async (req, res, next) => {
         select: "quantity amount reference paidAt", // Add payment details including quantity
       })
 
-      .select("ticketNumber ticketToken status attendeeName qrCode") // Select relevant fields
+      .select("ticketNumber ticketToken status attendeeName qrCode attendeeEmail createdAt") // Select all relevant fields
       .sort({ createdAt: -1 });
 
     const formattedTickets = userTickets.map((ticket) => ({
