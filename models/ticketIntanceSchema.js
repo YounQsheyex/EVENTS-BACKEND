@@ -47,7 +47,10 @@ const ticketInstanceSchema = new mongoose.Schema({
     usedAt: {
         type: Date
     },
-    
+    qrCode: {
+        type: String, 
+        required: false
+        },
 //     eventName: String,
 //     eventDate: Date,
 //     eventLocation: String,
