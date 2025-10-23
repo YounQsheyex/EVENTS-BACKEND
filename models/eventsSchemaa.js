@@ -1,5 +1,25 @@
 const mongoose = require("mongoose");
 
+const formatTimeToAmPm = (time) => {
+  if (!time) return "";
+  const [hourStr, minute] = time.split(":");
+  let hour = parseInt(hourStr, 10);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12 || 12; // 0 becomes 12
+  return `${hour}:${minute} ${ampm}`;
+};
+
+// Helper: convert "hh:mm AM/PM" → 24-hour "HH:mm"
+const parseAmPmTo24 = (timeStr) => {
+  if (!timeStr) return "";
+  const [time, modifier] = timeStr.split(" ");
+  let [hours, minutes] = time.split(":");
+  hours = parseInt(hours, 10);
+  if (modifier.toUpperCase() === "PM" && hours < 12) hours += 12;
+  if (modifier.toUpperCase() === "AM" && hours === 12) hours = 0;
+  return `${hours.toString().padStart(2, "0")}:${minutes}`;
+};
+
 const TicketSchema = new mongoose.Schema(
   {
     name: {
@@ -48,8 +68,18 @@ const EventSchema = new mongoose.Schema({
   perks: { type: String },
   startDate: { type: Date, required: true },
   endDate: { type: Date, required: true },
-  startTime: { type: String, required: true }, // Example: "18:00" (6 PM)
-  endTime: { type: String, required: true },
+  startTime: {
+    type: String,
+    required: true,
+    set: parseAmPmTo24, // converts “2:00 PM” → “14:00” when saving
+    get: formatTimeToAmPm, // converts “14:00” → “2:00 PM” when reading
+  },
+  endTime: {
+    type: String,
+    required: true,
+    set: parseAmPmTo24,
+    get: formatTimeToAmPm,
+  },
   address: { type: String, required: true },
   image: {
     type: String,
