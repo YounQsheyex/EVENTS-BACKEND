@@ -297,7 +297,7 @@ const deleteEvent = async (req, res, next) => {
       });
 
     //  Only admins or superAdmins can update
-    if (!["admin", "superAdmin"].includes(req.user.role)) {
+    if ("superAdmin" !== req.user.role) {
       return res.status(403).json({
         success: false,
         message: "Access denied. Only admins can delete events.",
