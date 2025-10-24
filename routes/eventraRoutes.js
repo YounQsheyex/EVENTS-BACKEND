@@ -12,6 +12,6 @@ router.post("/create-event", isUser, isAdmin, createEvents);
 router.get("/all-event", getAllEvents);
 router.get("/single-event/:id", isUser, getSingleEvent);
 router.patch("/update-event/:id", isUser, isAdmin, updateEvent);
-router.patch("/delete-event/:id", isUser, isSuperAdmin, deleteEvent);
+router.delete("/delete-event/:id", isUser, isSuperAdmin, deleteEvent);
 
 module.exports = router;
