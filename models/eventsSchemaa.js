@@ -1,12 +1,12 @@
 const mongoose = require("mongoose");
 
-// 🕓 Convert any flexible time input → 24-hour format ("HH:mm")
+//  Convert any flexible time input → 24-hour format ("HH:mm")
 const parseFlexibleTimeTo24 = (timeStr) => {
   if (!timeStr || typeof timeStr !== "string") return "";
 
   const cleaned = timeStr.trim().toUpperCase();
 
-  // 🧩 Handle simple 24-hour input: "16:00" or "09:30"
+  //  Handle simple 24-hour input: "16:00" or "09:30"
   if (/^\d{1,2}:\d{2}$/.test(cleaned)) {
     const [hourStr, minute] = cleaned.split(":");
     const hour = parseInt(hourStr, 10);
@@ -15,7 +15,7 @@ const parseFlexibleTimeTo24 = (timeStr) => {
     }
   }
 
-  // 🧩 Handle 12-hour input like "4:00PM", "04:30 am", "4:00 pm"
+  //  Handle 12-hour input like "4:00PM", "04:30 am", "4:00 pm"
   const match = cleaned.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
   if (!match) return ""; // Invalid format — safe fallback
 
@@ -31,7 +31,7 @@ const parseFlexibleTimeTo24 = (timeStr) => {
   return `${hour.toString().padStart(2, "0")}:${minute}`;
 };
 
-// 🕒 Convert 24-hour ("HH:mm") → 12-hour ("hh:mm AM/PM")
+// Convert 24-hour ("HH:mm") → 12-hour ("hh:mm AM/PM")
 const formatTimeToAmPm = (time) => {
   if (!time || typeof time !== "string") return "";
   const [hourStr, minute] = time.split(":");
@@ -73,49 +73,58 @@ const TicketSchema = new mongoose.Schema(
   { _id: true }
 );
 
-const EventSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  description: { type: String },
-  category: {
-    type: String,
-    enum: [
-      "business",
-      "sports",
-      "festivals",
-      "food-&-drinks",
-      "dating",
-      "hobbies",
-    ],
+const EventSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    description: { type: String },
+    category: {
+      type: String,
+      enum: [
+        "business",
+        "sports",
+        "festivals",
+        "food-&-drinks",
+        "dating",
+        "hobbies",
+      ],
+    },
+    capacity: { type: Number },
+    perks: { type: String },
+    startDate: { type: Date, required: true },
+    endDate: { type: Date, required: true },
+    startTime: {
+      type: String,
+      required: true,
+      set: parseFlexibleTimeTo24,
+      get: formatTimeToAmPm,
+    },
+    endTime: {
+      type: String,
+      required: true,
+      set: parseFlexibleTimeTo24,
+      get: formatTimeToAmPm,
+    },
+    address: { type: String, required: true },
+    image: {
+      type: String,
+    },
+    tickets: [TicketSchema],
+    status: { type: String, enum: ["draft", "live"], default: "draft" },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "users",
+      required: true,
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "users",
+      default: null,
+    },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
   },
-  capacity: { type: Number },
-  perks: { type: String },
-  startDate: { type: Date, required: true },
-  endDate: { type: Date, required: true },
-  startTime: {
-    type: String,
-    required: true,
-    set: parseFlexibleTimeTo24,
-    get: formatTimeToAmPm,
-  },
-  endTime: {
-    type: String,
-    required: true,
-    set: parseFlexibleTimeTo24,
-    get: formatTimeToAmPm,
-  },
-  address: { type: String, required: true },
-  image: {
-    type: String,
-  },
-  tickets: [TicketSchema],
-  status: { type: String, enum: ["draft", "live"], default: "draft" },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "users", //  matches your USER model name
-    required: true,
-  },
-  createdAt: { type: Date, default: Date.now },
-});
+  { timestamps: true }
+);
 
 //  Prevent duplicates: same title, address, date & time
 EventSchema.index(
