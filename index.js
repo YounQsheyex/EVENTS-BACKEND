@@ -13,10 +13,12 @@ require("./config/passport");
 const cloudinary = require("cloudinary").v2;
 
 const userRoutes = require("./routes/userRoutes");
+const eventraRoutes = require("./routes/eventraRoutes");
 const eventRoutes = require("./routes/eventRoutes");
 const googleRoutes = require("./routes/googleRoutes");
 const ticketRoutes = require("./routes/ticketRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const verifyQrcode = require("./routes/qrcode")
 const webhookRoutes = require("./routes/webhookRoute");
 
 // Import Error middleware to handle errors throughout the API.
@@ -60,10 +62,12 @@ app.get("/", (req, res) => {
   res.status(200).json({ success: true, message: "Welcome to Events Server" });
 });
 app.use("/api/auth", userRoutes);
+app.use("/api/eventra", eventraRoutes);
 // make use of errorMiddleware as backup if ever any error occurs in any event route.
 app.use("/api/events", eventRoutes);
 app.use("/api/tickets", ticketRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/qrcode",verifyQrcode)
 app.use("/api/webhook", webhookRoutes);
 app.use("/auth", googleRoutes);
 
