@@ -287,4 +287,44 @@ const updateEvent = async (req, res) => {
   }
 };
 
-module.exports = { createEvents, getAllEvents, getSingleEvent, updateEvent };
+const deleteEvent = async (req, res, next) => {
+  try {
+    // Ensure event ID is provided
+    if (!req.params.id)
+      return res.status(400).json({
+        success: false,
+        message: "Event id is required.",
+      });
+
+    //  Only admins or superAdmins can update
+    if (!["admin", "superAdmin"].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only admins can delete events.",
+      });
+    }
+
+    // Permanently delete event
+    const event = await EVENTS.findByIdAndDelete(req.params.id);
+
+    if (!event)
+      return res.status(404).json({
+        success: false,
+        message: "Event not found!",
+      });
+
+    res
+      .status(200)
+      .json({ success: true, message: "Event deleted successfully." });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  createEvents,
+  getAllEvents,
+  getSingleEvent,
+  updateEvent,
+  deleteEvent,
+};
