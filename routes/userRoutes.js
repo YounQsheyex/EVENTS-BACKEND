@@ -22,7 +22,7 @@ router.post("/verify-email/:token", handleVerifyEmail);
 router.post("/resend-email", resendVerificationEmail);
 router.post("/forgot-password", handleForgotPassword);
 router.post("/reset-password", handleResetPassword);
-router.post("/change-password/:id", isUser, handleChangePassword);
+router.post("/change-password", isUser, handleChangePassword);
 router.get("/all-users", isUser, isAdmin, getAllUsers);
 router.get("/single-user", isUser, handleGetUser);
 router.patch("/update-user", isUser, handleUpdateUser);
