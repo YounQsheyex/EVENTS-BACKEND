@@ -64,4 +64,5 @@ const ticketInstanceSchema = new mongoose.Schema({
 
 ticketInstanceSchema.index({ user: 1, status: 1 }); // KEEP: This is a useful compound index
 
-module.exports = mongoose.model('TicketInstance', ticketInstanceSchema);
+const TicketInstance = mongoose.model('TicketInstance', ticketInstanceSchema);
+module.exports = TicketInstance

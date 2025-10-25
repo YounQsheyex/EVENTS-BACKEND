@@ -1,6 +1,6 @@
 const paymentSchema = require("../models/paymentSchema");
 const mongoose = require("mongoose");
-const ticketSchema = require("../models/ticketSchema");
+// const ticketSchema = require("../models/ticketSchema");
 const userSchema = require("../models/usersSchema");
 const EVENTS  = require("../models/eventsSchemaa");
 const ticketInstanceSchema = require("../models/ticketIntanceSchema");
@@ -15,446 +15,580 @@ const { generateTicketInstances } = require("../helpers/ticketInstance");
 const baseUrl = process.env.BACKEND_URL.replace(/\/$/, "");
 
 const handlePaymentInitialization = async (req, res, next) => {
-  const { quantity: Quantity, firstname, lastname } = req.body;
-  const { ticketId } = req.params;
-  const { _id: userId, email } = req.user;
+    const { quantity: Quantity, firstname, lastname, email } = req.body;
+    const { ticketId } = req.params;
+    const { _id: userId} = req.user;
 
-  if (!ticketId || !Quantity || !firstname || !lastname) {
-    return res.status(400).json({
-      success: "fail",
-      message: "Please enter necessary credentials",
-    });
-  }
-
-  const requestedQuantity = parseInt(Quantity, 10); // Validate quantity
-
-  if (isNaN(requestedQuantity) || requestedQuantity <= 0) {
-    return res.status(400).json({
-      success: "fail",
-      message: "Invalid quantity specified",
-    });
-  }
-
-  try {
-    console.log(mongoose.modelNames()); // Fetch ticket and populate the event with only the title and eventDate fields
-    const ticket = await ticketSchema.findById(ticketId).populate({
-      path: "event",
-      select: "title eventDate _id", // Select the fields we need
-    });
-
-    if (
-      !ticket ||
-      ticket.status === "sold out" ||
-      ticket.status === "unavailable"
-    ) {
-      return res.status(404).json({
-        success: "fail",
-        message: "Ticket not available or sold out",
-      });
-    } // --- NEW CHECK: Validate against maxOrder limit ---
-
-    if (requestedQuantity > ticket.maxOrder) {
-      return res.status(400).json({
-        success: "fail",
-        message: `You cannot order more than ${ticket.maxOrder} tickets per transaction.`,
-      });
-    } // ---------------------------------------------------- // Check if enough quantity is available
-    if (ticket.quantity < requestedQuantity) {
-      return res.status(400).json({
-        success: "fail",
-        message: `Only ${ticket.quantity} of ${ticket.type} tickets are available.`,
-      });
-    } // Calculate total amount
-
-    const totalAmount = ticket.price * requestedQuantity; // Generate secure reference // added userid incase i forget
-    const reference = `TKT_${ticketId}_${Date.now()}_${userId}`;
-
-    const response = await paystack.transaction.initialize({
-      email,
-      amount: totalAmount * 100, // Convert to kobo
-      reference: reference,
-      callback_url: `${process.env.BACKEND_URL_TEST}/api/payments/verify`,
-      metadata: {
-        user: userId,
-        ticket: ticketId,
-        quantity: requestedQuantity,
-        firstname: firstname,
-        lastname: lastname,
-      },
-    });
-
-    if (!response.status || !response.data) {
-      console.error("Paystack Initialization Failed:", response);
-      return res.status(400).json({
-        status: "fail",
-        message:
-          response.message ||
-          "Failed to initialize payment with Paystack. Check your API key and input data.",
-      });
+    if (!ticketId || !Quantity || !firstname || !lastname || !email) {
+        return res.status(400).json({
+            success: "fail",
+            message: "Please enter necessary credentials",
+        });
     }
 
-    const payment = await paymentSchema.create({
-      user: userId,
-      firstname: firstname,
-      lastname: lastname,
-      ticket: ticketId,
-      reference,
-      amount: totalAmount,
-      quantity: requestedQuantity,
-      status: "pending",
-    }); // setImmediate(async () => { //     try { //         await sendVerifyPaymentlink({ //             email: email, //             lastname: sanitizedLastname, //             reference: reference, //             amount: totalAmount, //             status: "pending", //             currency: "NGN", //             ticketDetails: { //                 eventName: ticket.eventName || ticket.event || 'Event', //                 ticketType: ticket.type, //                 quantity: requestedQuantity, //                 pricePerTicket: ticket.price //             }, //             verificationLink: confirmationLink //         }); //     } catch (emailError) { //         console.error("Failed to send payment link email:", emailError); //         // TODO: Add to retry queue //     } // });
+    const requestedQuantity = parseInt(Quantity, 10); // Validate quantity
 
-    res.status(200).json({
-      status: "success",
-      message: "Payment initialized. redirect user to the checkout page",
-      data: {
-        authorization_url: response.data.authorization_url,
-        access_code: response.data.access_code,
-        reference: reference,
-        amount: totalAmount,
-        paymentId: payment._id,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
+    if (isNaN(requestedQuantity) || requestedQuantity <= 0) {
+        return res.status(400).json({
+            success: "fail",
+            message: "Invalid quantity specified",
+        });
+    }
+
+    try {
+        // ⬅️ CRITICAL CHANGE: Query the Event model using the embedded ticket's ID
+        const event = await EVENTS.findOne({ "tickets._id": ticketId });
+        
+        if (!event) {
+            return res.status(404).json({
+                success: "fail",
+                message: "Event or Ticket not found.",
+            });
+        }
+        
+        // Extract the specific ticket subdocument
+        const ticket = event.tickets.id(ticketId); 
+
+        // ⚠️ NOTE: Embedded tickets usually don't have a 'status' field like 'sold out' 
+        // unless you added it manually, but we keep the logic for robustness.
+        // if (
+        //     !ticket ||
+        //     ticket.status === "sold out" ||
+        //     ticket.status === "unavailable"
+        // ) {
+        //     return res.status(404).json({
+        //         success: "fail",
+        //         message: "Ticket not available or sold out",
+        //     });
+        // } 
+        
+        // --- NEW CHECK: Validate Event Status ---
+        if (event.status !== "live") {
+             return res.status(400).json({
+                 success: "fail",
+                 message: "This event is not currently accepting orders.",
+             });
+        }
+        // --- Validate against maxOrder limit (using maxPerOrder field) ---
+
+        if (requestedQuantity > ticket.maxPerOrder) { // Assuming maxPerOrder from your original schema
+            return res.status(400).json({
+                success: "fail",
+                message: `You cannot order more than ${ticket.maxPerOrder} tickets per transaction.`,
+            });
+        } 
+        
+        // Check if enough quantity is available (using quantityAvailable field)
+        if (ticket.quantityAvailable < requestedQuantity) { // Assuming quantityAvailable from your original schema
+            return res.status(400).json({
+                success: "fail",
+                message: `Only ${ticket.quantityAvailable} of ${ticket.name} tickets are available.`,
+            });
+        } 
+        
+        // Calculate total amount
+        const totalAmount = ticket.price * requestedQuantity; // Generate secure reference 
+        const reference = `TKT_${ticketId}_${Date.now()}_${userId}`;
+
+        const response = await paystack.transaction.initialize({
+            email,
+            amount: totalAmount * 100, // Convert to kobo
+            reference: reference,
+            callback_url: `${baseUrl}/api/payments/verify`,
+            metadata: {
+                user: userId,
+                email:email,
+                ticket: ticketId,
+                event: event._id.toString(), // ⬅️ IMPORTANT: Pass the event ID in metadata
+                quantity: requestedQuantity,
+                firstname: firstname,
+                lastname: lastname,
+            },
+        });
+
+        if (!response.status || !response.data) {
+            console.error("Paystack Initialization Failed:", response);
+            return res.status(400).json({
+                status: "fail",
+                message: response.message || "Failed to initialize payment with Paystack.",
+            });
+        }
+
+        const payment = await paymentSchema.create({
+            user: userId,
+            email:email,
+            firstname: firstname,
+            lastname: lastname,
+            ticket: ticketId,
+            event: event._id, // ⬅️ IMPORTANT: Save the Event ID on the Payment record
+            reference,
+            amount: totalAmount,
+            quantity: requestedQuantity,
+            status: "pending",
+        }); 
+
+        res.status(200).json({
+            status: "success",
+            message: "Payment initialized. redirect user to the checkout page",
+            data: {
+                authorization_url: response.data.authorization_url,
+                access_code: response.data.access_code,
+                reference: reference,
+                amount: totalAmount,
+                paymentId: payment._id,
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
 };
 
 const handlePaymentVerification = async (req, res, next) => {
-  const reference = req.query.reference || req.params.reference;
+    const reference = req.query.reference || req.params.reference;
+    let payment; // Declare payment here for access in catch block
+    let session;
+    let finalStatus = 'error'; // To track payment status for outer catch block
 
-  if (!reference) {
-    return res.status(400).json({
-      success: "fail",
-      message: "Invalid payment reference",
-    });
-  }
-
-  try {
-    // Verify transaction with Paystack
-    const transactionResult = await paystack.transaction.verify(reference); // console.log("Paystack verification:", transactionResult); // FIX: Added checks for transactionResult and transactionResult.data to prevent // "Cannot read properties of null (reading 'status')" if Paystack returns a malformed or empty response.
-    if (
-      !transactionResult ||
-      !transactionResult.data ||
-      transactionResult.data.status !== "success"
-    ) {
-      const paystackMessage = transactionResult
-        ? transactionResult.message || "Transaction failed or pending"
-        : "Paystack returned an invalid response structure.";
-
-      return res.status(400).json({
-        status: "fail",
-        message: paystackMessage,
-      });
-    } // Find payment record // trying the find and update block to
-
-    const payment = await paymentSchema.findOneAndUpdate(
-      {
-        reference,
-        status: "pending",
-      },
-      {
-        status: "processing",
-        processingStartedAt: new Date(),
-      },
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
-
-    if (!payment) {
-      return res.status(404).json({
-        status: "fail",
-        message: "Payment record not found for this reference.",
-      });
-    } // PREVENT DOUBLE PROCESSING
-    if (payment.status === "success") {
-      // In a real app, you would look up the generated ticket instances here
-      return res.status(200).json({
-        status: "success",
-        message: "Transaction already verified and processed.",
-        data: {
-          reference: payment.reference, // ... other data
-        },
-      });
-    } // --- FETCH NECESSARY DATA --- // UPDATED: Populate the event details when fetching the ticket
-
-    const ticket = await ticketSchema.findById(payment.ticket).populate({
-      path: "event",
-      select: "title eventDate _id location",
-    });
-
-    const user = await userSchema.findById(payment.user);
-    //  console.log('TICKET EVENT VALUE:', ticket.event?._id || ticket.event);
-    //  console.log(" Using event for ticket instance:", payment.event?._id || payment.event)
-    //         console.log({user:user})
-    //         console.log({ticket:ticket})
-
-    if (!ticket || !user) {
-      // Handle missing data - critical error
-      return res
-        .status(404)
-        .json({ status: "fail", message: "Ticket or User data missing." });
+    if (!reference) {
+        return res.status(400).json({
+            success: "fail",
+            message: "Invalid payment reference",
+        });
     }
-    const purchasedQuantity = payment.quantity; // Start session for atomic operations
-
-    const session = await mongoose.startSession();
-    let generatedTickets = [];
 
     try {
-      await session.startTransaction(); // 1. Inventory Check & Update
+        // --- 1. Optimistic Lock (Atomic Update) ---
+        payment = await paymentSchema.findOneAndUpdate(
+            { reference, status: "pending" },
+            { status: "processing", processingStartedAt: new Date() },
+            { new: true, runValidators: true }
+        );
 
-      if (ticket.quantity >= purchasedQuantity) {
-        ticket.quantity -= purchasedQuantity;
-        if (ticket.quantity === 0) {
-          ticket.status = "sold out";
+        if (!payment) {
+            const existingPayment = await paymentSchema.findOne({ reference });
+
+            if (!existingPayment) {
+                return res.status(404).json({ status: "fail", message: "Payment record not found." });
+            }
+            // Already finalized
+            return res.status(200).json({
+                status: "success",
+                message: `Transaction already finalized with status: ${existingPayment.status}`,
+                data: { reference: existingPayment.reference, status: existingPayment.status },
+            });
         }
-        await ticket.save({ session });
-      } else {
-        // Inventory Over-Sale - ABORT TRANSACTION
-        await session.abortTransaction(); // It might be better to throw a specific error that leads to a refund process // Or a retry if a concurrent request just updated the inventory.
-        const error = new Error("Inventory oversold for this ticket.");
-        error.statusCode = 409; // Conflict
-        throw error;
-      }
 
-      // Ensure payment has event before creating ticket instances
-      if (!payment.event && ticket.event) {
-        payment.event = ticket.event._id || ticket.event;
-        await payment.save({ session });
-      } // 2. Generate Ticket Instances (CRITICAL FIX: SESSION PASSED)
+        // --- 2. Paystack API Verification ---
+        const transactionResult = await paystack.transaction.verify(reference);
+        const data = transactionResult?.data;
 
-      // console.log(" Using event for ticket instance:", payment.event._id)
+        if (!transactionResult || !data || data.status !== "success") {
+            await paymentSchema.findOneAndUpdate({ reference }, { status: "failed", verificationData: data });
+            const paystackMessage = transactionResult ? transactionResult.message || "Transaction failed or pending" : "Paystack returned an invalid response.";
+            return res.status(400).json({ status: "fail", message: `Verification Failed: ${paystackMessage}` });
+        }
 
-      generatedTickets = await generateTicketInstances(
-        payment,
-        ticket,
-        user,
-        session
-      ); // 3. Update Payment Status
-      //             console.log(`Generated ${generatedTickets.length} ticket instances.`);
+        // --- 3. CRITICAL SECURITY CHECK: AMOUNT CONSISTENCY ---
+        // ⚠️ NOTE: We must compare the payment.amount (stored in Naira/Base unit) 
+        // against Paystack's data.amount (stored in Kobo/Cents) * 100
+        const expectedAmountKobo = (payment.amount * 100).toFixed(0); 
+        
+        if (data.amount.toString() !== expectedAmountKobo.toString()) {
+            console.error(`Amount Mismatch: Expected ${expectedAmountKobo} kobo, Received ${data.amount} kobo`);
+            await paymentSchema.findOneAndUpdate({ reference }, { status: "amount_mismatch", verificationData: data });
+            return res.status(400).json({ status: "fail", message: "Security Error: Amount paid does not match expected amount." });
+        }
+        
+        // --- 4. Data Lookup (User and Event) ---
+        const purchasedQuantity = payment.quantity; 
+        const ticketId = payment.ticket;
+        const userId = payment.user;
 
-      payment.status = "success";
-      payment.paidAt = new Date();
-      payment.gatewayResponse = transactionResult.data;
-      payment.ticketInstances = generatedTickets.map((t) => t._id);
-      await payment.save({ session }); // Commit the transaction only after ALL operations are successful
+        const user = await userSchema.findById(userId);
+        // ⬅️ CRITICAL CHANGE: Find the event containing the embedded ticket
+        const event = await EVENTS.findOne({ "tickets._id": ticketId }); 
 
-      await session.commitTransaction(); // --- POST-TRANSACTION ACTIONS (Emails) ---
+        if (!user || !event) {
+            await paymentSchema.findOneAndUpdate({ reference }, { status: "review_required" });
+            return res.status(404).json({ status: "fail", message: "Ticket or User data missing (DB inconsistency)." });
+        }
+        const specificTicket = event.tickets.id(ticketId);
 
-      const customerEmail = user.email;
-      const customerName = payment.lastname || payment.firstname || "Customer";
-      const amount = payment.amount / 100;
-      const currency = transactionResult.data.currency; // This object contains the full list of generated tickets, suitable for the email template
 
-      const emailTicketDetails = {
-        eventName: ticket.event ? ticket.event.title : "Event", // Use populated event title
-        eventDate: ticket.event ? ticket.event.eventDate : undefined, // Use populated event date
-        ticketType: ticket.type,
-        quantity: purchasedQuantity,
-        pricePerTicket: ticket.price,
-        generatedTickets: generatedTickets.map((t) => ({
-          number: t.ticketNumber,
-          token: t.ticketToken,
-        })),
-      }; // This is the clean summary object for the final API response
-      const clientTicketSummary = {
-        eventName: emailTicketDetails.eventName,
-        eventDate: emailTicketDetails.eventDate,
-        ticketType: emailTicketDetails.ticketType,
-        quantity: emailTicketDetails.quantity,
-        pricePerTicket: emailTicketDetails.pricePerTicket,
-      };
+        // --- 5. Start Mongoose Transaction ---
+        session = await mongoose.startSession();
+        session.startTransaction();
 
-      try {
-        // Assuming sendPaymentConfirmationEmail function exists and is imported
-        await sendPaymentConfirmationEmail({
-          email: customerEmail,
-          lastname: customerName,
-          reference: payment.reference,
-          amount: amount,
-          status: payment.status,
-          currency: currency,
-          ticketDetails: emailTicketDetails, // Pass the full object for the email template
-        });
-      } catch (emailError) {
-        res
-          .status(200)
-          .json({
-            success: "false",
-            message:
-              "Failed to send confirmation email but payment was successful",
-          });
-        console.error("Failed to send confirmation email:", emailError);
-      } // --- FINAL SUCCESS RESPONSE ---
+        let generatedTickets = [];
 
-      res.status(200).json({
-        status: "success",
-        message: "Transaction verified and tickets generated successfully",
-        data: {
-          reference: payment.reference,
-          amount: payment.amount,
-          currency: currency,
-          status: payment.status,
-          paidAt: payment.paidAt, // FIX: Use the summary object without the duplicated ticket list
-          ticketDetails: clientTicketSummary, // This is the clean, single list of tickets for the client
-          tickets: generatedTickets.map((t) => ({
-            _id: t._id,
-            number: t.ticketNumber,
-            token: t.ticketToken,
-          })),
-        },
-      });
-    } catch (transactionError) {
-      await session.abortTransaction(); // Important: Propagate the error up
-      throw transactionError;
-    } finally {
-      session.endSession();
+        try {
+            // A. ATOMIC INVENTORY DECREMENT (Must use session)
+            const updatedEvent = await EVENTS.findOneAndUpdate(
+                { 
+                    "tickets._id": ticketId,
+                    "tickets.quantityAvailable": { $gte: purchasedQuantity } // Lock
+                },
+                {
+                    $inc: { "tickets.$.quantityAvailable": -purchasedQuantity } // Decrement
+                },
+                { new: true, session } // ⬅️ CRITICAL: Use session
+            );
+
+            if (!updatedEvent) {
+                await session.abortTransaction(); 
+                finalStatus = 'inventory_error';
+                await paymentSchema.findOneAndUpdate({ reference }, { status: finalStatus, verificationData: data });
+                return res.status(409).json({ status: "fail", message: "Ticket inventory sold out. Contact support." });
+            }
+
+            // B. TICKET INSTANCE CREATION (Uses specificTicket from event)
+            generatedTickets = await generateTicketInstances(
+                payment,
+                specificTicket, // Pass the subdocument
+                user,
+                session
+            ); 
+
+            // C. FINAL PAYMENT RECORD UPDATE (Must use session)
+            payment.status = "success";
+            payment.paidAt = new Date();
+            payment.gatewayResponse = transactionResult.data;
+            payment.ticketInstances = generatedTickets.map((t) => t._id); 
+            await payment.save({ session }); 
+
+            await session.commitTransaction(); 
+            finalStatus = 'success'; 
+
+        } catch (transactionError) {
+            await session.abortTransaction(); 
+            throw transactionError;
+        } finally {
+            session.endSession();
+        }
+        
+        // --- POST-TRANSACTION ACTIONS (Emails & Response) ---
+        // Accessing event and ticket data from the objects fetched before the transaction
+        const emailTicketDetails = {
+            eventName: event.title, // Use event title from the fetched object
+            eventDate: event.startDate, // Use event start date
+            ticketType: specificTicket.name,
+            quantity: purchasedQuantity,
+            pricePerTicket: specificTicket.price,
+            generatedTickets: generatedTickets.map((t) => ({
+                number: t.ticketNumber,
+                token: t.ticketToken,
+            })),
+        };
+        const clientTicketSummary = {
+            eventName: emailTicketDetails.eventName,
+            eventDate: emailTicketDetails.eventDate,
+            ticketType: emailTicketDetails.ticketType,
+            quantity: emailTicketDetails.quantity,
+            pricePerTicket: emailTicketDetails.pricePerTicket,
+        };
+        
+        const currency = transactionResult.data.currency;
+
+        try {
+             await sendPaymentConfirmationEmail({
+                email: payment.email,
+                lastname: user.lastname,
+                reference: payment.reference,
+                amount: payment.amount,
+                status: payment.status,
+                currency: currency,
+                ticketDetails: emailTicketDetails,
+             });
+        } catch (emailError) {
+            res.status(200).json({
+                success: "false",
+                message: "Failed to send confirmation email but payment was successful",
+            });
+            console.error("Failed to send confirmation email:", emailError);
+        }
+
+        return res.status(200).json({
+            status: "success",
+            message: "Transaction verified and tickets generated successfully",
+            data: {
+                // --- Payment Details ---
+                email: payment.email, // Added from your update
+                reference: payment.reference,
+                amount: payment.amount,
+                currency: currency,
+                status: payment.status,
+                paidAt: payment.paidAt,
+                
+                // --- Summary of Purchase ---
+                ticketDetails: clientTicketSummary,
+                
+                // --- Individual Ticket Instances ---
+                tickets: generatedTickets.map((t) => ({
+                    _id: t._id,
+                    number: t.ticketNumber,
+                    token: t.ticketToken,
+                    // qrcode: t?.qrCode 
+                })),
+            }
+
+     });
+    } catch (error) {
+        console.error("Payment verification error:", error); 
+        next(error);
     }
-  } catch (error) {
-    console.error("Payment verification error:", error); // This ensures the error is correctly handled by Express error handler
-    next(error);
-  }
 };
 
+// ... handleAllTransactions and handleUserTicket would need significant modification 
+// to use aggregation ($lookup and $unwind) instead of population, 
+// but the initial controllers are the priority.
+
+
+
 const handleAllTransactions = async (req, res, next) => {
-  // Robustly extract user ID from req.user (which holds the Mongoose document)
+    try {
+        const transactions = await paymentSchema.aggregate([
+            // 1. Lookup User Details
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "user",
+                    foreignField: "_id",
+                    as: "user"
+                }
+            },
+            { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+            
+            // 2. Lookup Ticket Instances
+            {
+                $lookup: {
+                    from: "ticketinstances", 
+                    localField: "ticketInstances",
+                    foreignField: "_id",
+                    as: "ticketInstances"
+                }
+            },
+            
+            // 3. Lookup the Parent Event
+           {
+                $lookup: {
+                    from: "eventras", // ⬅️ Use the CONFIRMED collection name (e.g., "eventras")
+                    let: { eventId: "$event" }, // Capture the payment's event ID
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    // Cast the payment's event ID to ObjectId for a strict match
+                                    $eq: ["$_id", { $toObjectId: "$$eventId" }] 
+                                }
+                            }
+                        },
+                        { $project: { _id: 1, title: 1, eventDate: 1, tickets: 1 } } // Project necessary fields
+                    ],
+                    as: "eventDetails"
+                }
+                },
+                { $unwind: { path: "$eventDetails", preserveNullAndEmptyArrays: true } },
 
-  try {
-    // Use the renamed Payment model
-    const transactions = await paymentSchema
-      .find()
-      .populate("user", "firstname lastname email") // UPDATED: Nested population to get event details (title, eventDate)
-      .populate({
-        path: "ticket",
-        select: "quantity type price event status", // Removed eventName
-        populate: {
-          path: "event",
-          select: "title eventDate",
-        },
-      })
-      .populate("ticketInstances", "ticketToken ticketNumber qrCode")
-      .sort({ createdAt: -1 }); // Most recent first
+            // 4. Project and Filter (Extract the correct embedded ticket)
+            {
+                $project: {
+                    _id: 1,
+                    reference: 1,
+                    amount: 1,
+                    quantity: 1,
+                    status: 1,
+                    paidAt: 1,
+                    createdAt: 1,
+                    
+                    user: {
+                        _id: "$user._id",
+                        firstname: "$user.firstname",
+                        lastname: "$user.lastname",
+                        email: "$user.email"
+                    },
 
-    res.status(200).json({
-      status: "success",
-      results: transactions.length,
-      data: {
-        transactions,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
+                    ticketInstances: {
+                        $map: {
+                            input: "$ticketInstances",
+                            as: "t",
+                            in: {
+                                _id: "$$t._id",
+                                ticketNumber: "$$t.ticketNumber",
+                                ticketToken: "$$t.ticketToken",
+                                qrCode: "$$t.qrCode"
+                            }
+                        }
+                    },
+
+                    // ⬅️ FIX APPLIED HERE: Use $toObjectId on the stored ID
+                    ticketType: {
+                        $arrayElemAt: [
+                            {
+                                $filter: {
+                                    input: "$eventDetails.tickets",
+                                    as: "ticket",
+                                    cond: { 
+                                        $eq: [
+                                            "$$ticket._id", 
+                                            { $toObjectId: "$ticket" } // Ensures type match
+                                        ] 
+                                    }
+                                }
+                            },
+                            0
+                        ]
+                    },
+
+                    event: {
+                        _id: "$eventDetails._id",
+                        title: "$eventDetails.title",
+                        eventDate: "$eventDetails.eventDate"
+                    }
+                }
+            },
+            
+            // 5. Sort by creation date
+            { $sort: { createdAt: -1 } }
+        ]);
+
+        res.status(200).json({
+            status: "success",
+            results: transactions.length,
+            data: {
+                transactions,
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
 };
 
 const handleUserTicket = async (req, res, next) => {
-  // Robustly extract user ID from req.user (which holds the Mongoose document)
-  const { _id: userId } = req.user;
-  // Extract query parameters for search and filtering
-  const { status, search } = req.query;
+    // Robustly extract user ID from req.user
+    const { _id: userId } = req.user;
+    // Extract query parameters for search and filtering
+    const { status, search } = req.query;
 
-  try {
-    // Start building the query object with the mandatory user ID filter
-    let findQuery = { user: userId };
+    try {
+        let matchQuery = { user: userId };
 
-    // 1. Add Status Filtering: Allows querying like /api/tickets?status=used
-    if (status) {
-      findQuery.status = status;
+        // 1. Status Filtering
+        if (status) {
+            matchQuery.status = status;
+        }
+
+        // 2. Text Search Filtering (Must use $or with existing matchQuery)
+        if (search) {
+            const searchRegex = new RegExp(search, 'i');
+            // Add search criteria to the $match stage
+            matchQuery.$or = [
+                { ticketNumber: { $regex: searchRegex } },
+                { ticketToken: { $regex: searchRegex } },
+                { attendeeName: { $regex: searchRegex } }
+            ];
+        }
+
+        const userTickets = await ticketInstanceSchema.aggregate([
+            // STAGE 1: Filter by User ID and Query Parameters
+            { $match: matchQuery },
+            
+            // STAGE 2: Lookup Payment Details (reference, amount, quantity, etc.)
+            {
+                $lookup: {
+                    from: "mainticketpayments", // ⬅️ USE THE CORRECT PLURALIZED COLLECTION NAME
+                    localField: "payment",
+                    foreignField: "_id",
+                    as: "paymentDetails"
+                }
+            },
+            { $unwind: { path: "$paymentDetails", preserveNullAndEmptyArrays: true } },
+
+            // STAGE 3: Lookup Parent Event Details
+            {
+                $lookup: {
+                    from: "eventras", // ⬅️ USE THE CORRECT PLURALIZED COLLECTION NAME (from Eventra model)
+                    localField: "event",
+                    foreignField: "_id",
+                    as: "eventDetails"
+                }
+            },
+            { $unwind: { path: "$eventDetails", preserveNullAndEmptyArrays: true } },
+
+            // STAGE 4: Lookup the Embedded Ticket Type Subdocument
+            {
+                $addFields: {
+                    ticketTypeDetails: {
+                        $arrayElemAt: [
+                            {
+                                $filter: {
+                                    input: "$eventDetails.tickets",
+                                    as: "ticket",
+                                    // CRITICAL: Match the TicketInstance.ticketType ID with the embedded ticket's _id
+                                    cond: { $eq: ["$$ticket._id", "$ticketType"] } 
+                                }
+                            },
+                            0
+                        ]
+                    }
+                }
+            },
+
+            // STAGE 5: Project the final output structure
+            {
+                $project: {
+                    _id: 1,
+                    ticketNumber: 1,
+                    ticketToken: 1,
+                    status: 1,
+                    attendeeName: 1,
+                    qrCode: 1,
+                    attendeeEmail: 1,
+                    createdAt: 1,
+                    
+                    // Event Fields
+                    event: {
+                        _id: "$eventDetails._id",
+                        title: "$eventDetails.title",
+                        eventDate: "$eventDetails.eventDate",
+                        location: "$eventDetails.address", // ⬅️ NOTE: Using 'address' from EventSchema
+                        category: "$eventDetails.category",
+                        eventStart: "$eventDetails.startTime", // ⬅️ NOTE: Using 'startTime'
+                        eventEnd: "$eventDetails.endTime", // ⬅️ NOTE: Using 'endTime'
+                        eventImage: "$eventDetails.image", // ⬅️ NOTE: Using 'image'
+                    },
+
+                    // Ticket Type Fields (The one we fixed)
+                    ticketType: {
+                        _id: "$ticketTypeDetails._id",
+                        name: "$ticketTypeDetails.name",
+                        type: "$ticketTypeDetails.type",
+                        price: "$ticketTypeDetails.price",
+                    },
+
+                    // Payment Fields
+                    payment: {
+                        quantity: "$paymentDetails.quantity",
+                        amount: "$paymentDetails.amount",
+                        reference: "$paymentDetails.reference",
+                        paidAt: "$paymentDetails.paidAt",
+                    },
+                }
+            },
+            
+            // STAGE 6: Sort
+            { $sort: { createdAt: -1 } }
+        ]);
+
+        res.status(200).json({
+            status: "success",
+            results: userTickets.length,
+            data: {
+                tickets: userTickets, // Use the aggregated output directly
+            },
+        });
+    } catch (error) {
+        next(error);
     }
-
-    // 2. Add Text Search Filtering: Allows querying like /api/tickets?search=VIP
-    if (search) {
-      // Case-insensitive regex search
-      const searchRegex = new RegExp(search, 'i');
-      
-      // Use $or to search across fields directly on the TicketInstance document
-      findQuery.$or = [
-        // Search by ticket number
-        { ticketNumber: { $regex: searchRegex } },
-        // Search by ticket token
-        { ticketToken: { $regex: searchRegex } },
-        // Search by attendee name
-        { attendeeName: { $regex: searchRegex } }
-      ];
-    }
-
-    // Assuming your TicketInstance schema is named 'ticketInstanceSchema'
-    const userTickets = await ticketInstanceSchema
-      .find(findQuery) // Use the dynamic query object
-      .populate({
-        path: "ticketType",
-        select: "type name price quantity event",
-        populate: {
-          path: "event",
-          select: "title eventDate location category eventStart eventEnd eventImage", // Select all needed event fields
-        },
-      })
-      .populate({
-        path: "payment",
-        select: "quantity amount reference paidAt", // Add payment details including quantity
-      })
-
-      .select("ticketNumber ticketToken status attendeeName qrCode attendeeEmail createdAt") // Select all relevant fields
-      .sort({ createdAt: -1 });
-
-    const formattedTickets = userTickets.map((ticket) => ({
-      _id: ticket._id,
-      ticketNumber: ticket.ticketNumber,
-      ticketToken: ticket.ticketToken,
-      status: ticket.status,
-      attendeeName: ticket.attendeeName,
-      qrCode: ticket.qrCode,
-      attendeeEmail: ticket.attendeeEmail,
-      createdAt: ticket.createdAt,
-     
-
-      // Event details from populated data
-      event: ticket.ticketType?.event
-        ? {
-            _id: ticket.ticketType.event._id,
-            title: ticket.ticketType.event.title,
-            eventDate: ticket.ticketType.event.eventDate,
-            location: ticket.ticketType.event.location,
-            eventStart: ticket.ticketType.event.eventStart,
-            eventEnd: ticket.ticketType.event.eventEnd,
-            eventImage: ticket.ticketType.event.eventImage,
-            category: ticket.ticketType.event.category,
-          }
-        : null,
-
-      // Ticket type details
-      ticketType: ticket.ticketType
-        ? {
-            _id: ticket.ticketType._id,
-            name: ticket.ticketType.name,
-            type: ticket.ticketType.type,
-            price: ticket.ticketType.price,
-          }
-        : null,
-
-      // Payment details (including quantity purchased)
-      payment: ticket.payment
-        ? {
-            quantity: ticket.payment.quantity,
-            amount: ticket.payment.amount,
-            reference: ticket.payment.reference,
-            paidAt: ticket.payment.paidAt,
-          }
-        : null,
-    }));
-
-    res.status(200).json({
-      status: "success",
-      results: formattedTickets.length,
-      data: {
-        tickets: formattedTickets,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
 };
 
 const getSalesOverview = async (req, res, next) => {

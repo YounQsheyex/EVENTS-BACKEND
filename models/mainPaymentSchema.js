@@ -8,12 +8,16 @@ const paymentSchema = new mongoose.Schema({
     },
     event: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Events"
+    ref: "Eventra"
     },
-    email:{
-      type:String,
-      required:true  
-      },
+    ticket:{
+        type:String,
+        required:true
+    },
+    ticketInstances: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "TicketInstance", 
+    }],
     firstname:{
       type:String,
       required:true
@@ -22,16 +26,7 @@ const paymentSchema = new mongoose.Schema({
       type:String,
       required:true
     },
-    ticket: { 
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "TicketMain",
-      required: true,
-    },
-    // ADDED: Array to hold references to the individual generated tickets
-    ticketInstances: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "TicketInstance", 
-    }],
+    
     quantity:{
       type:Number,
       required:true,
@@ -48,12 +43,12 @@ const paymentSchema = new mongoose.Schema({
     },
     status: {
       type: String,
-      enum: ["pending","processing", "success", "failed"],
+      enum: ["pending","processing", "success", "failed", "amount_mismatch","inventory_error"],
       default: "pending",
     },
     paidAt: Date,
     gatewayResponse: Object,
 }, { timestamps: true })
 
-const PAYMENT = mongoose.model("ticketPayment", paymentSchema)
-module.exports =PAYMENT
+const PAYMENT = mongoose.model("mainTicketPayment", paymentSchema)
+ module.exports = PAYMENT
