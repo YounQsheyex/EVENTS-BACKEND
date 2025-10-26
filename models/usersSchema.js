@@ -23,6 +23,11 @@ const userSchema = new Schema(
       unique: true,
       match: /^\+?[1-9][0-9]{7,14}$/,
     },
+    profilePicture: {
+      type: String,
+      default:
+        "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ5c2QCGWIDwM5VfLmcIWkU3aMzzQ18uf2ISQ&s",
+    },
     password: {
       type: String,
       required: function () {

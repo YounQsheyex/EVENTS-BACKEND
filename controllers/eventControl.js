@@ -169,10 +169,9 @@ const getSingleEvent = async (req, res) => {
         .json({ success: false, message: "Invalid event ID" });
     }
 
-    const event = await EVENTS.findById(id).populate(
-      "createdBy",
-      "firstname lastname email role"
-    );
+    const event = await EVENTS.findById(id)
+      .populate("createdBy", "firstname lastname  role")
+      .populate("updatedBy", "firstname lastname  role");
 
     if (!event) {
       return res
@@ -187,4 +186,145 @@ const getSingleEvent = async (req, res) => {
   }
 };
 
-module.exports = { createEvents, getAllEvents, getSingleEvent };
+// update events
+const updateEvent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    //  Only admins or superAdmins can update
+    if (!["admin", "superAdmin"].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only admins can update events.",
+      });
+    }
+
+    //  Find the existing event
+    const event = await EVENTS.findById(id);
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: "Event not found",
+      });
+    }
+
+    //  Handle new image upload (if provided)
+    if (req.files && req.files.image) {
+      const file = req.files.image;
+
+      // Upload new image
+      const result = await cloudinary.uploader.upload(file.tempFilePath, {
+        folder: "Eventra",
+        use_filename: true,
+      });
+      updates.image = result.secure_url;
+    }
+
+    //  Parse tickets properly
+    if (updates.tickets) {
+      try {
+        updates.tickets =
+          typeof updates.tickets === "string"
+            ? JSON.parse(updates.tickets)
+            : updates.tickets;
+      } catch (err) {
+        return res
+          .status(400)
+          .json({ message: "Invalid tickets format. Must be JSON." });
+      }
+
+      // Validate allowed ticket names
+      const allowedNames = ["Regular", "VIP", "VVIP"];
+      for (const ticket of updates.tickets) {
+        if (!allowedNames.includes(ticket.name)) {
+          return res.status(400).json({
+            message: `Invalid ticket name: ${ticket.name}`,
+          });
+        }
+        if (ticket.type === "free") {
+          ticket.price = 0; // Enforce free ticket pricing
+        }
+      }
+    }
+
+    //  Duplicate check (exclude current event)
+    if (updates.address || updates.startDate || updates.startTime) {
+      const duplicateEvent = await EVENTS.findOne({
+        _id: { $ne: id },
+        address: updates.address || event.address,
+        startDate: updates.startDate || event.startDate,
+        startTime: updates.startTime || event.startTime,
+      });
+
+      if (duplicateEvent) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Another event with the same venue, date, and start time already exists.",
+        });
+      }
+    }
+    // Add updatedBy before saving
+    event.updatedBy = req.user._id;
+
+    //  Apply updates
+    Object.assign(event, updates);
+    await event.save();
+
+    const populatedEvent = await EVENTS.findById(id)
+      .populate("createdBy", "firstname lastname  role")
+      .populate("updatedBy", "firstname lastname  role");
+
+    res.status(200).json({
+      success: true,
+      message: "Event updated successfully",
+      event: populatedEvent,
+    });
+  } catch (error) {
+    console.error("Error updating event:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const deleteEvent = async (req, res, next) => {
+  try {
+    // Ensure event ID is provided
+    if (!req.params.id)
+      return res.status(400).json({
+        success: false,
+        message: "Event id is required.",
+      });
+
+    //  Only admins or superAdmins can update
+    if ("superAdmin" !== req.user.role) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only admins can delete events.",
+      });
+    }
+
+    // Permanently delete event
+    const event = await EVENTS.findByIdAndDelete(req.params.id);
+
+    if (!event)
+      return res.status(404).json({
+        success: false,
+        message: "Event not found!",
+      });
+
+    res
+      .status(200)
+      .json({ success: true, message: "Event deleted successfully." });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  createEvents,
+  getAllEvents,
+  getSingleEvent,
+  updateEvent,
+  deleteEvent,
+};
