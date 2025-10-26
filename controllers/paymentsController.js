@@ -240,12 +240,13 @@ const handlePaymentVerification = async (req, res, next) => {
             }
 
             // B. TICKET INSTANCE CREATION (Uses specificTicket from event)
-            generatedTickets = await generateTicketInstances(
+           generatedTickets = await generateTicketInstances(
                 payment,
-                specificTicket, // Pass the subdocument
+                specificTicket, // Pass the ticket subdocument
                 user,
+                event,          // ⬅️ CRITICAL FIX: Pass the full event object
                 session
-            ); 
+            );
 
             // C. FINAL PAYMENT RECORD UPDATE (Must use session)
             payment.status = "success";
@@ -493,7 +494,7 @@ const handleUserTicket = async (req, res, next) => {
             // STAGE 2: Lookup Payment Details (reference, amount, quantity, etc.)
             {
                 $lookup: {
-                    from: "mainticketpayments", // ⬅️ USE THE CORRECT PLURALIZED COLLECTION NAME
+                    from: "ticketPayments", // ⬅️ USE THE CORRECT PLURALIZED COLLECTION NAME
                     localField: "payment",
                     foreignField: "_id",
                     as: "paymentDetails"
