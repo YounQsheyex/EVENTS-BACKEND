@@ -49,18 +49,16 @@ const handlePaymentInitialization = async (req, res, next) => {
         // Extract the specific ticket subdocument
         const ticket = event.tickets.id(ticketId); 
 
-        // ⚠️ NOTE: Embedded tickets usually don't have a 'status' field like 'sold out' 
-        // unless you added it manually, but we keep the logic for robustness.
-        // if (
-        //     !ticket ||
-        //     ticket.status === "sold out" ||
-        //     ticket.status === "unavailable"
-        // ) {
-        //     return res.status(404).json({
-        //         success: "fail",
-        //         message: "Ticket not available or sold out",
-        //     });
-        // } 
+       
+        if (
+            !ticket ||
+            ticket.status === "sold out"
+        ) {
+            return res.status(404).json({
+                success: "fail",
+                message: "Ticket not available or sold out",
+            });
+        } 
         
         // --- NEW CHECK: Validate Event Status ---
         if (event.status !== "live") {
@@ -94,7 +92,7 @@ const handlePaymentInitialization = async (req, res, next) => {
             email,
             amount: totalAmount * 100, // Convert to kobo
             reference: reference,
-            callback_url: `${baseUrl}/api/payments/verify`,
+            callback_url: `${process.env.BACKEND_URL_TEST}/api/payments/verify`,
             metadata: {
                 user: userId,
                 email:email,
