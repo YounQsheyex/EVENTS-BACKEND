@@ -16,6 +16,9 @@ const userRoutes = require("./routes/userRoutes");
 const eventraRoutes = require("./routes/eventraRoutes");
 const eventRoutes = require("./routes/eventRoutes");
 const googleRoutes = require("./routes/googleRoutes");
+const contactRoutes = require("./routes/contactRoute");
+const testimonialRoutes = require("./routes/testimonialRoutes")
+
 const ticketRoutes = require("./routes/ticketRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const verifyQrcode = require("./routes/qrcode");
@@ -72,6 +75,9 @@ app.use("/api/qrcode", verifyQrcode);
 app.use("/api/webhook", webhookRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/auth", googleRoutes);
+app.use("/api/testimonials", testimonialRoutes);
+app.use("/api/contact", contactRoutes);
+
 
 // error routes
 app.use("/", (req, res) => {

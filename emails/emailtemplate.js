@@ -257,6 +257,60 @@ const resetEmailTemplate = (firstname, clientUrl) => {
 </html>`;
 };
 
+
+const contactEmailReply = (firstname) => {
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Message Received</title>
+  </head>
+  <body
+    style="
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    "
+  >
+    <main style="border: 1px solid #006f6a; border-radius: 10px">
+      <div
+        style="
+          background-color: #045854;
+          text-align: center;
+          padding: 30px;
+          border-radius: 10px 10px 0 0;
+        "
+      >
+        <img
+          src="https://res.cloudinary.com/dgvucesc6/image/upload/Frame_2121455760_fj8zmx.png"
+          alt="Eventra Logo"
+          style="max-width: 200px; margin-bottom: 20px; border-radius: 5px;"
+        />
+        <h1 style="font-size: 24px; color: white; font-weight: 700">
+          We've received your message
+        </h1>
+      </div>
+      <div style="background-color: #ffffff; padding: 30px; border-radius: 0 0 10px 10px;">
+        <p style="font-size: 18px; color: #000;">
+          <strong>Hi ${firstname || "there"},</strong>
+        </p>
+        <p>Thank you for reaching out to Eventra. Your message has been received successfully.</p>
+        <p>Our support team will review it and get back to you as soon as possible.</p>
+        <p style="margin-top: 20px;">Best regards,<br /><strong>The Eventra Team</strong></p>
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;" />
+        <p style="font-size: 12px; color: #666;">© ${new Date().getFullYear()} Eventra. All rights reserved.</p>
+      </div>
+    </main>
+  </body>
+</html>`;
+};
+
+
+module.exports = { createWelcomeEmail, resetEmailTemplate, contactEmailReply };
 const PaymentComfirmationEmail = (
   lastname,
   amount,
