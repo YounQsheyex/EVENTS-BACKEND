@@ -1,6 +1,5 @@
 require("dotenv").config();
 const express = require("express");
-const http = require("http");
 const app = express();
 const cors = require("cors");
 const mongoose = require("mongoose");
@@ -17,6 +16,9 @@ const userRoutes = require("./routes/userRoutes");
 const eventraRoutes = require("./routes/eventraRoutes");
 const eventRoutes = require("./routes/eventRoutes");
 const googleRoutes = require("./routes/googleRoutes");
+const contactRoutes = require("./routes/contactRoute");
+const testimonialRoutes = require("./routes/testimonialRoutes");
+
 const ticketRoutes = require("./routes/ticketRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const verifyQrcode = require("./routes/qrcode");
@@ -28,11 +30,6 @@ const errorMiddleware = require("./middleware/error");
 // Import arcjet middleware to handle rate limiting throughout the API.
 const arcjetMiddleware = require("./middleware/arjectMiddleware");
 const redisConfig = require("./helpers/redis");
-
-const server = http.createServer(app);
-const io = require("socket.io")(server, {
-  cors: { origin: "*" },
-});
 
 // middleware
 app.use(express.json());
@@ -78,6 +75,8 @@ app.use("/api/qrcode", verifyQrcode);
 app.use("/api/webhook", webhookRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/auth", googleRoutes);
+app.use("/api/testimonials", testimonialRoutes);
+app.use("/api/contact", contactRoutes);
 
 // error routes
 app.use("/", (req, res) => {
@@ -86,22 +85,8 @@ app.use("/", (req, res) => {
 
 app.use(errorMiddleware);
 
-io.on("connection", (socket) => {
-  console.log(`User with id:${socket.id} is connected`);
-  io.on("connection", (socket) => {
-    console.log(Object.keys(socket));
-  });
-
-  socket.on("message", (message) => {
-    io.emit("message", `${message}`);
-  });
-});
-
 const startServer = async () => {
   try {
-    server.listen(5000, () => {
-      console.log(`Listening on http://localhost:${5000}`);
-    });
     redisConfig.flushall("ASYNC");
     await mongoose.connect(process.env.MONGO_URL, { dbName: "EVENTS-DB" });
     app.listen(PORT, () => {
