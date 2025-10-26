@@ -250,7 +250,7 @@ const handleResetPassword = async (req, res) => {
 };
 const handleChangePassword = async (req, res) => {
   const { oldPassword, newPassword } = req.body;
-  const { _id } = req.user;
+  const userId = req.user._id;
 
   if (!oldPassword || !newPassword) {
     return res
@@ -259,7 +259,7 @@ const handleChangePassword = async (req, res) => {
   }
 
   try {
-    const user = await USER.findById(_id);
+    const user = await USER.findById(userId);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -272,7 +272,7 @@ const handleChangePassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
     await USER.findOneAndUpdate(
-      user,
+      userId,
       { password: hashedPassword },
       { new: true }
     );

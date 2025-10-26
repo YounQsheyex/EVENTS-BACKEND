@@ -7,10 +7,17 @@ const {
   markAsRead,
 } = require("../controllers/notifications");
 const { isUser, isAdmin, isSuperAdmin } = require("../middleware/auth");
+const cache = require("../middleware/redisMiddleware");
 
 router.post("/create", isUser, isAdmin, createNotification);
-router.get("/", getAllNotifications);
-router.get("/unread", isUser, getAllUnreadNotifications);
+router.get(
+  "/",
+  isUser,
+  isAdmin,
+  cache("All Notifications: "),
+  getAllNotifications
+);
+router.get("/unread", isUser, isAdmin, getAllUnreadNotifications);
 router.patch("/mark/:id", isUser, isAdmin, markAsRead);
 router.delete("/delete/:id", isUser, isAdmin, isSuperAdmin, deleteNotification);
 
