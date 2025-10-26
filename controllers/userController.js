@@ -1,8 +1,14 @@
 const USER = require("../models/usersSchema");
 const bcrypt = require("bcryptjs");
+const cloudinary = require("cloudinary").v2;
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const generateToken = require("../helpers/generateToken");
-const { sendWelcomeEmail, sendResetEmail } = require("../emails/sendemails");
+const {
+  sendWelcomeEmail,
+  sendResetEmail,
+  sendAdminEmail,
+} = require("../emails/sendemails");
 const { use } = require("passport");
 
 // registration controller
@@ -13,7 +19,7 @@ const handleRegister = async (req, res) => {
       $or: [{ email: email || null }, { phoneNumber: phoneNumber || null }],
     });
     if (userExist) {
-      res.status(400).json({ message: "Email or Phone Number Already Exist" });
+      res.status(400).json({ message: "Email or Phone Number Already Existt" });
     }
 
     const salt = await bcrypt.genSalt();
@@ -107,7 +113,7 @@ const userLogin = async (req, res) => {
     const token = jwt.sign(
       { userId: user._id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "1 days" }
     );
     res.status(200).json({
       message: "Welcome To EVENTRA",
@@ -117,6 +123,8 @@ const userLogin = async (req, res) => {
         userId: user._id,
         firstname: user.firstname,
         lastname: user.lastname,
+        role: user.role,
+        phoneNumber: user.phoneNumber,
       },
     });
   } catch (error) {
@@ -241,23 +249,30 @@ const handleResetPassword = async (req, res) => {
   }
 };
 const handleChangePassword = async (req, res) => {
-  const { password } = req.body;
-  const userId = req.user._id;
+  const { oldPassword, newPassword } = req.body;
+  const { _id } = req.user;
 
-  if (!password) {
-    return res.status(400).json({ message: "Please enter a new password" });
+  if (!oldPassword || !newPassword) {
+    return res
+      .status(400)
+      .json({ message: "Please enter  old and new password" });
   }
 
   try {
-    const user = await USER.findById(userId);
+    const user = await USER.findById(_id);
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
+    const passwordMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!passwordMatch) {
+      return res.status(400).json({ message: "Old Password is Incorrect" });
+    }
     const salt = await bcrypt.genSalt();
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
 
     await USER.findOneAndUpdate(
-      userId,
+      user,
       { password: hashedPassword },
       { new: true }
     );
@@ -271,6 +286,174 @@ const handleChangePassword = async (req, res) => {
   }
 };
 
+// Get all users
+const getAllUsers = async (req, res) => {
+  try {
+    const users = await USER.find({ role: "user", isVerified: "true" }).select(
+      "-password -verificationToken -verificationTokenExpires"
+    ); // Exclude sensitive fields
+
+    if (!users || users.length === 0) {
+      return res.status(404).json({ message: "No users found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: users.length,
+      users,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+// get single user
+const handleGetUser = async (req, res) => {
+  const { _id } = req.user;
+  try {
+    const user = await USER.findById(_id);
+    if (!user) {
+      return res.status(404).json({ message: "user not found" });
+    }
+    res.status(200).json({ success: true, user });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const handleUpdateUser = async (req, res) => {
+  const { _id } = req.user;
+
+  //  Make sure req.body exists
+  const body = req.body || {};
+
+  try {
+    const user = await USER.findById(_id);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    // upload image with cloudinary
+    if (req.files && req.files.profilePicture) {
+      const profilePicture = req.files.profilePicture;
+      const result = await cloudinary.uploader.upload(
+        profilePicture.tempFilePath,
+        {
+          folder: "Eventra",
+          use_filename: true,
+          unique_filename: false,
+        }
+      );
+      user.profilePicture = result.secure_url;
+    }
+
+    //  Update only provided fields (don’t overwrite missing ones)
+    if (body.firstname) user.firstname = body.firstname;
+    if (body.lastname) user.lastname = body.lastname;
+    if (body.phoneNumber) user.phoneNumber = body.phoneNumber;
+    if (body.email) user.email = body.email;
+
+    const updatedUser = await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "User updated successfully",
+      updatedUser,
+    });
+  } catch (error) {
+    console.error("Error updating user:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const createAdmin = async (req, res) => {
+  try {
+    const superAdminId = req.user._id; // this assumes JWT middleware populates req.user
+    const superAdmin = await USER.findById(superAdminId);
+
+    if (!superAdmin || superAdmin.role !== "superAdmin") {
+      return res
+        .status(403)
+        .json({ message: "Access denied. Not a super admin." });
+    }
+
+    const { firstname, lastname, email, phoneNumber } = req.body;
+
+    // Check if email already exists
+    const existingUser = await USER.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "Email already exists." });
+    }
+
+    // Generate random password
+    const randomPassword = crypto.randomBytes(6).toString("hex"); // e.g., 'f3a9b1c0d2e4'
+    const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+    // Create admin user
+    const admin = new USER({
+      firstname,
+      lastname,
+      email,
+      phoneNumber,
+      password: hashedPassword,
+      provider: "local",
+      role: "admin",
+      isVerified: true, // Admin created by Super Admin is automatically verified
+    });
+
+    await admin.save();
+    await sendAdminEmail({
+      firstname: admin.firstname,
+      email: admin.email,
+      password: randomPassword,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message:
+        "Admin account created successfully and credentials sent via email.",
+    });
+  } catch (error) {
+    console.error("Error creating admin:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+// get all Admins
+const getAllAdmin = async (req, res) => {
+  try {
+    const users = await USER.find({ role: "admin", isVerified: "true" }).select(
+      "-password -verificationToken -verificationTokenExpires"
+    ); // Exclude sensitive fields
+
+    if (!users || users.length === 0) {
+      return res.status(404).json({ message: "No users found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: users.length,
+      users,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+const deleteAdmin = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const adminExist = await USER.findById({ _id: id });
+    if (!adminExist) {
+      return res.status(404).json({ message: "admin not found" });
+    }
+    await USER.findByIdAndDelete({ _id: id });
+    res.status(200).json({ message: "Admin removed Succesfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   handleRegister,
   handleVerifyEmail,
@@ -279,4 +462,10 @@ module.exports = {
   handleForgotPassword,
   handleResetPassword,
   handleChangePassword,
+  getAllUsers,
+  handleGetUser,
+  handleUpdateUser,
+  createAdmin,
+  getAllAdmin,
+  deleteAdmin,
 };

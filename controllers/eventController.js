@@ -1,5 +1,5 @@
 // Import mongoose utility for starting sessions (used for transactions)
-const { startSession } = require("mongoose");
+const { startSession, default: mongoose } = require("mongoose");
 
 // Import the main dayjs library
 const dayjs = require("dayjs");
@@ -12,7 +12,8 @@ const tz = require("dayjs/plugin/timezone");
 const utc = require("dayjs/plugin/utc");
 
 // Import Event model (MongoDB schema for events)
-const EVENTS = require("../models/eventSchema");
+const EVENTS = require("../models/eventSchema.js");
+
 const redisConfig = require("../helpers/redis");
 const geocodeLocation = require("../helpers/locator.js");
 
@@ -28,15 +29,10 @@ dayjs.extend(tz);
    ======================== */
 const getAllEvents = async (req, res, next) => {
   try {
-    const { page, limit } = req.query; // Get current page from query
-    const pg = parseInt(page) || 1; // default to 1
-
     // total count (for info / frontend)
     const eventsCount = await EVENTS.countDocuments();
-    const lmt = parseInt(limit) || 6; // items per page default to 5
-    const skip = (pg - 1) * lmt; // how many to skip
 
-    const events = await EVENTS.find({}).skip(skip).limit(lmt).lean();
+    const events = await EVENTS.find({}).lean();
 
     // If no events, return 404
     if (!events.length)
@@ -63,19 +59,15 @@ const getAllEvents = async (req, res, next) => {
    ========================= */
 const getAllUpComingEvents = async (req, res, next) => {
   // Count events that belong to "upcoming" status
-  const eventsCount = await EVENTS.countDocuments({ status: "upcoming" });
+  const eventsCount = await EVENTS.countDocuments({
+    status: "upcoming",
+    published: "live",
+  });
   try {
-    const { page, limit } = req.query; // Get current page from query
-    const pg = parseInt(page) || 1; // default to 1
-    const lmt = parseInt(limit) || 8; // items per page default to 5
-
-    const skip = (pg - 1) * lmt; // how many to skip
-    const events = await EVENTS.find({ status: "upcoming" })
-      // Skip logic for pagination
-      .skip(skip)
-      // Show only 6 per page
-      .limit(lmt)
-      .lean();
+    const events = await EVENTS.find({
+      status: "upcoming",
+      published: "live",
+    }).lean();
 
     // If no upcoming events, return 404
     if (!events.length)
@@ -90,6 +82,66 @@ const getAllUpComingEvents = async (req, res, next) => {
     res
       .status(200)
       .json({ success: true, events, totalUpcomingEvents: eventsCount });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ========================
+// GET EVENT BY ID
+// ========================
+const getEventById = async (req, res, next) => {
+  try {
+    const event = await EVENTS.findById(req.params.id).lean();
+    if (!event)
+      return res
+        .status(404)
+        .json({ success: false, message: "Event not found." });
+
+    // Success: return event details
+    res.status(200).json({ success: true, event });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/* ========================
+   GET DRAFT EVENTS
+   ======================= */
+const getDraftEvents = async (req, res, next) => {
+  try {
+    const events = await EVENTS.find({ published: "draft" })
+      .lean()
+      .select("title id eventDate price status");
+
+    if (!events.length)
+      return res
+        .status(404)
+        .json({ success: false, message: "No drafted event found." });
+
+    // Success: return event details
+    res.status(200).json({ success: true, events });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/* ========================
+   GET DRAFT EVENTS
+   ======================= */
+const getLiveEvents = async (req, res, next) => {
+  try {
+    const events = await EVENTS.find({ published: "live" })
+      .lean()
+      .select("title id eventDate price status");
+
+    if (!events.length)
+      return res
+        .status(404)
+        .json({ success: false, message: "No live event found." });
+
+    // Success: return event details
+    res.status(200).json({ success: true, events });
   } catch (error) {
     next(error);
   }
@@ -112,10 +164,14 @@ const createEvents = async (req, res, next) => {
       eventDate,
       eventStart,
       eventEnd,
-      availableSeats,
+      maxCapacity,
       price,
       category,
-    } = req.body;
+      status,
+      ticketTypes,
+      eventImage,
+      perks,
+    } = req.params.id ? await EVENTS.findById(req.params.id) : req.body;
 
     await redisConfig.flushall("ASYNC");
 
@@ -130,31 +186,41 @@ const createEvents = async (req, res, next) => {
       !eventEnd ||
       !price ||
       !category ||
-      availableSeats === undefined
+      maxCapacity === undefined ||
+      !perks
+    )
+      if (!req.url.includes("draft"))
+        return res.status(400).json({
+          success: false,
+          message: "All fields are required.",
+        });
+
+    // Ensure event image is uploaded
+    if (
+      !req.files?.file.tempFilePath &&
+      !eventImage &&
+      req.url.includes("draft")
     )
       return res.status(400).json({
         success: false,
-        message: "All fields are required.",
+        message: "Event image is required but no image is provided.",
       });
-
-    // Ensure event image is uploaded
-    if (!req.files.file.tempFilePath)
-      return res
-        .status(400)
-        .json({ success: false, message: "Event image is required." });
 
     // Parse request body
     const eventDateObj = dayjs(eventDate, "YYYY-MM-DD").toDate();
     const eventStartObj = dayjs(eventStart, "YYYY-MM-DD HH:mm:ss").toDate();
 
     // Prevent duplicate events by checking unique combo
-    const existingEvent = await EVENTS.findOne({
-      location,
-      eventDate: eventDateObj,
-      eventStart: eventStartObj,
-    });
+    const existingEvent =
+      location && eventDateObj && eventStartObj
+        ? await EVENTS.findOne({
+            location,
+            eventDate: eventDateObj,
+            eventStart: eventStartObj,
+          })
+        : false;
 
-    if (existingEvent)
+    if (existingEvent && req.url.includes("drafts"))
       return res
         .status(400)
         .json({ success: false, message: "Event already exists." });
@@ -163,14 +229,19 @@ const createEvents = async (req, res, next) => {
     const eventlocus = await geocodeLocation(location);
 
     // Upload image to Cloudinary
-    const uploadImage = await cloudinary.uploader.upload(
-      req.files.file.tempFilePath,
-      {
-        folder: "Eventra/events",
-        unique_filename: false,
-        use_filename: true,
-      }
-    );
+    let uploadImage = eventImage;
+
+    if (!uploadImage && req.files.file.tempFilePath) {
+      // Upload image to Cloudinary
+      uploadImage = await cloudinary.uploader.upload(
+        req.files.file.tempFilePath,
+        {
+          folder: "Eventra/events",
+          unique_filename: false,
+          use_filename: true,
+        }
+      );
+    }
 
     // E.g:==> Create a date for "2025-09-21 15:15" in Africa/Lagos timezone
     //  - "2025-09-21 15:15" is just a string (local representation)
@@ -184,13 +255,17 @@ const createEvents = async (req, res, next) => {
       description,
       highlight,
       location,
+      availableSeats: maxCapacity,
       eventDate: dayjs.tz(eventDate, "Africa/Lagos").toDate(),
       eventStart: dayjs.tz(eventStart, "Africa/Lagos").toDate(),
       eventEnd: dayjs.tz(eventEnd, "Africa/Lagos").toDate(),
-      eventImage: uploadImage.secure_url, // Store Cloudinary image URL
-      availableSeats,
+      eventImage: eventImage ? eventImage : uploadImage.secure_url, // Store Cloudinary image URL
+      maxCapacity,
       price,
       category,
+      status,
+      ticketTypes: ticketTypes ? [ticketTypes] : [],
+      perks: perks ? [perks] : [],
     };
 
     if (eventlocus) {
@@ -198,7 +273,12 @@ const createEvents = async (req, res, next) => {
     }
 
     // Create new event document inside a transaction
-    const event = await EVENTS.create([eventObj], { session });
+    const event = !req.params.id
+      ? await EVENTS.create([eventObj], { session })
+      : await EVENTS.findByIdAndUpdate(req.params.id, {
+          published: "live",
+          ...eventObj,
+        });
 
     // Commit transaction (make changes permanent)
     await session.commitTransaction();
@@ -234,35 +314,41 @@ const filterEvent = async (req, res, next) => {
         filterObj[filter] = query[filter];
       } else if (filter === "price") {
         filterObj["price"] = query[filter] === "paid" ? { $gte: 1 } : 0;
+      } else if (filter === "maxcapacity") {
+        filterObj["maxCapacity"] = { $gte: query[filter] };
       } else if (filter === "seats") {
         filterObj["availableSeats"] =
           query[filter] === "available" ? { $gte: 1 } : 0;
       } else if (filter === "date") {
-        filterObj["eventDate"] = new Date(query[filter]);
+        filterObj["eventDate"] = dayjs(query[filter], "YYYY-MM-DD").toDate();
       } else if (
         Object.keys(query).includes("end") &&
         Object.keys(query).includes("start")
       ) {
         filterObj["eventDate"] = {
-          $lte: new Date(query["end"]).toISOString(),
-          $gte: new Date(query["start"]).toISOString(),
+          $lte: dayjs(query["end"], "YYYY-MM-DD").toDate(),
+          $gte: dayjs(query["start"], "YYYY-MM-DD").toDate(),
         };
       } else if (filter === "start") {
         filterObj["eventDate"] = {
-          $gte: new Date(query[filter]).toISOString(),
+          $gte: dayjs(query["start"], "YYYY-MM-DD").toDate(),
         };
       } else if (filter === "end") {
         filterObj["eventDate"] = {
-          $lte: new Date(query[filter]).toISOString(),
+          $lte: dayjs(query["end"], "YYYY-MM-DD").toDate(),
         };
       }
     }
+
+    filterObj.published = "live";
 
     // Fetch events based on processed query
     let events = await EVENTS.find(filterObj)
       .sort("asc")
       .skip((query.page ? query.page - 1 : 0) * 8)
       .limit(8);
+
+    const totalMatches = await EVENTS.countDocuments(filterObj);
 
     // If none found, send descriptive message
     if (!events.length)
@@ -276,7 +362,7 @@ const filterEvent = async (req, res, next) => {
       });
 
     // Success
-    res.status(200).json({ success: true, events });
+    res.status(200).json({ success: true, events, totalMatches });
   } catch (error) {
     next(error);
   }
@@ -309,18 +395,26 @@ const updateEvent = async (req, res, next) => {
         body.availableSeats = Number(body.availableSeats);
       }
 
+      if (body.maxCapacity !== undefined && body.maxCapacity >= 2) {
+        body.maxCapacity = Number(body.maxCapacity);
+      }
+
       if (typeof body.coordinates === "string") {
         body.coordinates = body.coordinates.split(", ");
       }
 
       if (body.location) {
+        console.log("location:", body.location);
         const locate = await geocodeLocation(body.location);
+        console.log("geocodeLocation:", locate);
         if (!locate && !body.coordinates.length)
           return res.status(400).json({
             success: false,
             message:
               "Please Provide the coordinates of this suggested location.",
           });
+
+        body.coordinates = locate;
       }
 
       if (req.files?.file) {
@@ -339,6 +433,11 @@ const updateEvent = async (req, res, next) => {
           }
         );
 
+        body.ticketTypes
+          ? (body.ticketTypes = [body.ticketTypes])
+          : body.ticketTypes;
+        body.perks ? (body.perks = [body.perks]) : body.perks;
+
         body.eventImage = uploadImage.secure_url;
       }
 
@@ -348,9 +447,11 @@ const updateEvent = async (req, res, next) => {
     const refined = await refinedBody();
 
     // Update event and return only its title
-    const event = await EVENTS.findByIdAndUpdate(req.params.id, refined, {
-      new: true,
-    }).select("title -_id");
+    const event = await EVENTS.findByIdAndUpdate(
+      req.params.id,
+      { $set: refined },
+      { new: true }
+    ).select("title _id");
 
     if (!event) {
       return res.status(404).json({
@@ -364,9 +465,9 @@ const updateEvent = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: `Successfully updated ${Object.keys(refined).join(
-        ", "
-      )} of the ${event.title} event.`,
+      message: `Successfully updated ${Object.keys(refined)
+        .join(", ")
+        .replace(/, ([^,]*)$/, " and $1")} of the ${event.title} event.`,
     });
   } catch (error) {
     next(error);
@@ -443,6 +544,9 @@ const deleteEvent = async (req, res, next) => {
 module.exports = {
   getAllEvents,
   getAllUpComingEvents,
+  getEventById,
+  getDraftEvents,
+  getLiveEvents,
   createEvents,
   filterEvent,
   updateEvent,

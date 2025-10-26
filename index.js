@@ -13,16 +13,23 @@ require("./config/passport");
 const cloudinary = require("cloudinary").v2;
 
 const userRoutes = require("./routes/userRoutes");
+const eventraRoutes = require("./routes/eventraRoutes");
 const eventRoutes = require("./routes/eventRoutes");
 const googleRoutes = require("./routes/googleRoutes");
 const contactRoutes = require("./routes/contactRoute");
 const testimonialRoutes = require("./routes/testimonialRoutes")
 
+const ticketRoutes = require("./routes/ticketRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const verifyQrcode = require("./routes/qrcode");
+const webhookRoutes = require("./routes/webhookRoute");
+const notificationRoutes = require("./routes/notificationRoutes");
 
 // Import Error middleware to handle errors throughout the API.
 const errorMiddleware = require("./middleware/error");
 // Import arcjet middleware to handle rate limiting throughout the API.
 const arcjetMiddleware = require("./middleware/arjectMiddleware");
+const redisConfig = require("./helpers/redis");
 
 // middleware
 app.use(express.json());
@@ -59,8 +66,14 @@ app.get("/", (req, res) => {
   res.status(200).json({ success: true, message: "Welcome to Events Server" });
 });
 app.use("/api/auth", userRoutes);
+app.use("/api/eventra", eventraRoutes);
 // make use of errorMiddleware as backup if ever any error occurs in any event route.
-app.use("/api/events", eventRoutes, errorMiddleware);
+app.use("/api/events", eventRoutes);
+app.use("/api/tickets", ticketRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/qrcode", verifyQrcode);
+app.use("/api/webhook", webhookRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.use("/auth", googleRoutes);
 app.use("/api/testimonials", testimonialRoutes);
 app.use("/api/contact", contactRoutes);
@@ -71,8 +84,11 @@ app.use("/", (req, res) => {
   res.status(404).json({ success: false, message: "ROUTE NOT FOUND" });
 });
 
+app.use(errorMiddleware);
+
 const startServer = async () => {
   try {
+    redisConfig.flushall("ASYNC");
     await mongoose.connect(process.env.MONGO_URL, { dbName: "EVENTS-DB" });
     app.listen(PORT, () => {
       console.log(`App Running on PORT ${PORT}`);

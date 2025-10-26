@@ -27,43 +27,36 @@ const eventSchema = new mongoose.Schema(
     // Event title
     title: {
       type: String,
-      required: [true, "Event title is required."],
+      minlength: [5, "Event title must be at least 5 characters."],
+      maxlength: [100, "Event title cannot exceed 100 characters."],
     },
 
     // Event description
     description: {
       type: String,
-      required: [true, "Event description is required."],
+      minlength: [10, "Event description must be at least 10 characters."],
+      maxlength: [500, "Event description cannot exceed 500 characters."],
     },
 
-    // Event highlights
     highlight: {
       type: String,
-      required: [true, "Event highlight is required."],
+      minlength: [5, "Event highlight must be at least 5 characters."],
     },
 
     // Location of the event
     location: {
       type: String,
-      required: [true, "Event location is required."],
     },
 
     // Event date
-    eventDate: {
-      type: Date,
-      required: [true, "Event date is required."],
-    },
+    eventDate: Date,
 
     // Event start time
-    eventStart: {
-      type: Date,
-      required: [true, "Event start time is required."],
-    },
+    eventStart: Date,
 
     // Event end time
     eventEnd: {
       type: Date,
-      required: [true, "Event end time is required."],
       validate: {
         validator: function (value) {
           return value >= this.eventStart;
@@ -75,14 +68,12 @@ const eventSchema = new mongoose.Schema(
     // Event price - must be >= 0
     price: {
       type: Number,
-      required: [true, "Event price is required"],
       min: 0,
     },
 
     // Image representing the event
     eventImage: {
       type: String,
-      required: [true, "Event image is required"],
     },
 
     // Event category - must be one of the given values
@@ -96,13 +87,16 @@ const eventSchema = new mongoose.Schema(
         "dating",
         "hobbies",
       ],
-      required: [true, "Event category is required"],
     },
 
     availableSeats: {
       type: Number,
-      required: [true, "Available seats is required"],
       min: [0, "Available seats cannot be negative"],
+    },
+
+    maxCapacity: {
+      type: Number,
+      min: [2, "Event capacity must be at least 2"],
     },
 
     // Event status - defaults to "upcoming"
@@ -116,7 +110,7 @@ const eventSchema = new mongoose.Schema(
     ticketTypes: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Ticket",
+        ref: "ticket",
       },
     ],
 
@@ -124,6 +118,18 @@ const eventSchema = new mongoose.Schema(
       type: Array,
       default: [6.4716092, 3.0684469],
     },
+
+    published: {
+      type: String,
+      enum: ["draft", "live"],
+      default: "draft",
+    },
+
+    perks: [
+      {
+        type: String,
+      },
+    ],
   },
   {
     // Add createdAt & updatedAt timestamps
