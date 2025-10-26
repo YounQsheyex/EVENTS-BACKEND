@@ -310,7 +310,7 @@ const contactEmailReply = (firstname) => {
 };
 
 
-module.exports = { createWelcomeEmail, resetEmailTemplate, contactEmailReply };
+
 const PaymentComfirmationEmail = (
   lastname,
   amount,
@@ -522,4 +522,5 @@ module.exports = {
   resetEmailTemplate,
   PaymentComfirmationEmail,
   createAdminEmail,
+  contactEmailReply,
 };
