@@ -48,6 +48,7 @@ const TicketSchema = new mongoose.Schema(
       type: String,
       enum: {
         values: ["available", "sold out"],
+        message: "Status must be either available or sold out",
       },
       default: "available",
       required: [true, "Ticket status is required"],
