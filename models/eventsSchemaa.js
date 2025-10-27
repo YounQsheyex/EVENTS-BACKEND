@@ -57,6 +57,11 @@ const TicketSchema = new mongoose.Schema(
     },
     startDate: Date,
     endDate: Date,
+    status: {
+      type: String,
+      enum: ["Available", "Sold-out"],
+      default: "Available",
+    },
     price: {
       type: Number,
       default: 0,
