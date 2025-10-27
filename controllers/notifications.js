@@ -1,3 +1,4 @@
+const redisConfig = require("../helpers/redis");
 const Notification = require("../models/notificationSchema");
 
 const createNotification = async (req, res, next) => {
@@ -15,6 +16,8 @@ const createNotification = async (req, res, next) => {
       content,
       about,
     });
+
+    await redisConfig.flushall("ASYNC");
 
     res.status(201).json({
       success: true,
@@ -96,6 +99,8 @@ const markAsRead = async (req, res, next) => {
       $push: { views: req.user._id },
     });
 
+    await redisConfig.flushall("ASYNC");
+
     res.status(200).json({
       success: true,
       message: "Notification marked as read successfully",
@@ -124,6 +129,8 @@ const deleteNotification = async (req, res, next) => {
     const deletedNotification = await Notification.findByIdAndDelete(
       req.params.id
     );
+
+    await redisConfig.flushall("ASYNC");
 
     if (!deletedNotification)
       return res.status(404).json({
