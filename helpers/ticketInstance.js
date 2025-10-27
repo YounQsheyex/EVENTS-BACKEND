@@ -1,104 +1,94 @@
 const TicketInstance = require('../models/ticketIntanceSchema');
-const generateQrCode = require('../helpers/qrCode');
+const generateQrCode = require('../helpers/qrCode'); // Assuming the path is correct
 const mongoose = require('mongoose');
-const crypto = require("crypto")
-
-// --- CRITICAL CHANGE: Accept 'session' as the fourth argument ---
-const generateTicketInstances = async (payment, ticket, user, session) => {
-    const ticketsToCreate = [];
-    const quantity = payment.quantity;
-
-        // Extract event ID with proper fallbacks
-    let eventId = payment.event?._id || payment.event || ticket.event?._id || ticket.event;
-    
-    // Convert to ObjectId if it's a string
-    if (typeof eventId === 'string') {
-        eventId = new mongoose.Types.ObjectId(eventId);
-    }
-    
-    if (!eventId) {
-        throw new Error('Event ID is required to generate ticket instances');
-    }
+const crypto = require("crypto");
 
 
-    // We do NOT use .create() inside the loop for performance/atomicity.
-    for (let i = 0; i < quantity; i++) {
-        
-        // --- FIX 1: The correct signature and logic for unique number ---
-        const ticketNumber = generateTicketNumber(payment.reference, i + 1);
-        
-        // Generate secure token for verification (no change needed here)
-        const ticketToken = generateSecureToken();
-
-
-         const qrCodeData = await generateQrCode({
-        event: payment.event || ticket.event,   // the event ID or name
-        ticketNumber: ticketNumber,
-        token: ticketToken
-    });
-        
-        const ticketInstanceData = {
-            payment: payment._id,
-            user: user._id,
-            ticketType: ticket._id,
-            ticketNumber: ticketNumber,
-            ticketToken: ticketToken,
-            event: eventId,
-            attendeeName: `${payment.firstname} ${payment.lastname}`,
-            attendeeEmail: user.email,
-            status: 'valid',
-            qrCode: qrCodeData,
-            metadata: {
-                purchaseDate: payment.paidAt,
-                price: ticket.price,
-                ticketType: ticket.type,
-                orderReference: payment.reference,
-                eventName: ticket.event?.title || 'Event',
-                eventDate: ticket.event?.eventDate,
-                eventLocation: ticket.event?.location
-            }
-        };
-
-          console.log("Ticket instance data:", JSON.stringify(ticketInstanceData, null, 2));
-        ticketsToCreate.push(ticketInstanceData);
-
-    }
-    
-    // --- CRITICAL CHANGE: Use insertMany with the session ---
-    const createdTicketInstances = await TicketInstance.insertMany(ticketsToCreate, { session });
-    
-    console.log(`Successfully created ${createdTicketInstances.length} ticket instances`);
-    return createdTicketInstances;
-};
+// --- Helper Functions (Exported for testing or kept private if only used here) ---
 
 /**
- * Generate unique ticket number using the payment's unique timestamp.
+ * Generate globally unique ticket number using the payment's unique reference part.
+ * Reference format: TKT_{ticketId}_{timestamp}_{userId}
  */
 const generateTicketNumber = (reference, sequenceNumber) => {
+    // We use the timestamp part of the reference (index 2) as the unique ID base.
     const parts = reference.split('_');
+    const uniqueTimestampPart = parts.length > 2 ? parts[2] : Date.now().toString(); 
     
-    // The timestamp is the unique part, which is the 3rd element (index 2) of the reference
-    // Fallback to Date.now() if the reference format is unexpected
-    const uniqueBaseID = parts.length > 2 ? parts[2] : Date.now(); 
+    // Use the last 8 digits of the unique timestamp part (guaranteed unique per payment)
+    const uniqueBaseID = uniqueTimestampPart.slice(-8);
     
-    const year = new Date().getFullYear();
+    // Format sequence number
     const formattedSequence = String(sequenceNumber).padStart(2, '0');
     
-    // Format: REF-2025-{UNIQUE_TIMESTAMP}-01
-    return `REF-${year}-${uniqueBaseID}-${formattedSequence}`;
+    // Format: REF-UNIQUE_TIMESTAMP_PART-SEQUENCE
+    // Example: REF-78901234-01 
+    // This is unique for every transaction and every sequence number within it.
+    return `REF-${uniqueBaseID}-${formattedSequence}`;
 };
-
 /**
  * Generate secure token for ticket verification
  */
 const generateSecureToken = () => {
-    // Assuming 'crypto' is correctly imported and is the Node.js built-in module
     return crypto.randomBytes(32).toString('hex');
 };
 
+const generateTicketInstances = async (payment, specificTicket, user, event, session) => {
+    const ticketsToCreate = [];
+    const quantity = payment.quantity;
+    const eventId = payment.event; // The ID of the parent Event
+
+    if (!eventId) {
+        throw new Error('Event ID is missing from payment record.');
+    }
+
+    for (let i = 0; i < quantity; i++) {
+        
+        const ticketNumber = generateTicketNumber(payment.reference, i + 1);
+        const ticketToken = generateSecureToken();
+
+        // Generate the QR Code (Base64 Data URL)
+        const qrCodeData = await generateQrCode({
+            event: eventId, 
+            ticketNumber: ticketNumber,
+            token: ticketToken
+        });
+        
+        const ticketInstanceData = {
+            payment: payment._id,
+            user: user._id,
+            ticketType: specificTicket._id, 
+            ticketNumber: ticketNumber,
+            ticketToken: ticketToken,
+            event: eventId,
+            attendeeName: `${payment.firstname} ${payment.lastname}`,
+            attendeeEmail: payment.email || user.email,
+            status: 'valid',
+            qrCode: qrCodeData,
+            metadata: {
+                // Denormalized data from the full 'event' object passed from the controller
+                eventName: event.title,
+                eventDate: event.startDate, 
+                eventLocation: event.address,
+                purchaseDate: payment.paidAt || new Date(),
+                price: specificTicket.price,
+                ticketType: specificTicket.name || specificTicket.type, 
+                orderReference: payment.reference,
+            }
+        };
+
+        ticketsToCreate.push(ticketInstanceData);
+    }
+    
+    // 🚀 Performance Optimization: Use insertMany for a single atomic database operation
+    const createdTicketInstances = await TicketInstance.insertMany(ticketsToCreate, { session });
+    
+    return createdTicketInstances;
+};
 
 module.exports = {
     generateTicketInstances,
-    generateTicketNumber,
+    // Export helpers if you need them for testing, otherwise they can stay internal.
+    generateTicketNumber, 
     generateSecureToken,
 };
