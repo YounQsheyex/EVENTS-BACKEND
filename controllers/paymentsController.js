@@ -92,7 +92,7 @@ const handlePaymentInitialization = async (req, res, next) => {
             email,
             amount: totalAmount * 100, // Convert to kobo
             reference: reference,
-            callback_url: `${process.env.BACKEND_URL_TEST}/api/payments/verify`,
+            callback_url: `${baseUrl}/api/payments/verify`,
             metadata: {
                 user: userId,
                 email:email,
@@ -494,7 +494,7 @@ const handleUserTicket = async (req, res, next) => {
             // STAGE 2: Lookup Payment Details (reference, amount, quantity, etc.)
             {
                 $lookup: {
-                    from: "ticketPayments", // ⬅️ USE THE CORRECT PLURALIZED COLLECTION NAME
+                    from: "ticketpayments", // ⬅️ USE THE CORRECT PLURALIZED COLLECTION NAME
                     localField: "payment",
                     foreignField: "_id",
                     as: "paymentDetails"
@@ -565,12 +565,14 @@ const handleUserTicket = async (req, res, next) => {
                     },
 
                     // Payment Fields
-                    payment: {
-                        quantity: "$paymentDetails.quantity",
-                        amount: "$paymentDetails.amount",
-                        reference: "$paymentDetails.reference",
-                        paidAt: "$paymentDetails.paidAt",
-                    },
+payment: {
+            quantity: "$paymentDetails.quantity",
+            amount: "$paymentDetails.amount",
+            reference: "$paymentDetails.reference",
+            paidAt: "$paymentDetails.paidAt",
+            email: "$paymentDetails.email", // Include email if needed
+            // NOTE: Ensure the keys match the fields in your payment schema
+        },
                 }
             },
             
