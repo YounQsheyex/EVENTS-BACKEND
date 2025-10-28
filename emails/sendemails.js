@@ -88,16 +88,18 @@ const sendPaymentConfirmationEmail = async ({
   amount,
   currency,
   ticketDetails,
-  event
+  clientBaseUrl = process.env.FRONTEND_URL,
 }) => {
   const subject = "Your Purchase Confirmation ";
+  const ticketUrl = `${clientBaseUrl}/dashboard/tickets`;
   const html = PaymentComfirmationEmail(
     lastname,
     reference,
     amount,
     currency,
     ticketDetails,
-    email
+    email,
+    ticketUrl
   );
 
   sendEmail({

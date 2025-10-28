@@ -313,68 +313,98 @@ const contactEmailReply = (firstname) => {
 
 const PaymentComfirmationEmail = (
   lastname,
-  amount,
-  reference,
-  currency,
-  ticketDetails,
+  reference, 
+  amount,   
+  currency,
+  ticketDetails,
+  ticketUrl
 ) => {
+
+  const ticketButtonHTML = `
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="${ticketUrl}" 
+               target="_blank" 
+               style="
+                  display: inline-block; 
+                  padding: 12px 25px; 
+                  background-color: #045854; 
+                  color: #ffffff; 
+                  text-decoration: none; 
+                  border-radius: 5px; 
+                  font-weight: bold;
+               "
+            >
+                VIEW MY TICKETS
+            </a>
+            <p style="margin-top: 15px; font-size: 14px; color: #666;">
+                Or, go directly to your dashboard to view your purchase.
+            </p>
+        </div>
+    `;
   // You should convert the amount from the subunit (e.g. kobo) to the major unit (e.g. Naira) here.
   // const displayAmount = (amount / 100).toFixed(2);
 
   return `
-    <html>
-      <body 
-        style="
-        font-family: Arial, sans-serif;
-        line-height: 1.6;
-        color: #333;
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 20px;
-      ">
-       <div
-          style="display: flex; justify-content: center; align-items: center; background-color: #045854; margin: 20px 0;"
-        >
-          <img
-            src="https://res.cloudinary.com/dgvucesc6/image/upload/Frame_2121455760_fj8zmx.png"
-            alt="eventra"
-             style="
-            max-width: 700.3px;
-            max-height: 43.92px;
-            margin-bottom: 20px;
-            border-radius: 5px;
-          "
-          />
-        </div>
-          
-        <p>Thank you for your purchase! Your order is confirmed.</p>
+    <html>
+      <body 
+        style="
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      ">
+       <div
+          style="display: flex; justify-content: center; align-items: center; background-color: #045854; margin: 20px 0;"
+        >
+          <img
+            src="https://res.cloudinary.com/dgvucesc6/image/upload/Frame_2121455760_fj8zmx.png"
+            alt="eventra"
+             style="
+            max-width: 700.3px;
+            max-height: 43.92px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+          "
+          />
+        </div>
+          
+        <p>Thank you for your purchase! Your order is confirmed.</p>
 
-        <p style="font-size: 18px; color: #000000">
-        <strong>Hello ${lastname},</strong>
-      </p>
-      <div
-        style="
-          background-color: #f3f6f8;
-          padding: 10px;
-          border-radius: 8px;
-          margin: 20px 0;
-        "
-      >
+        <p style="font-size: 18px; color: #000000">
+        <strong>Hello ${lastname},</strong>
+      </p>
+      
         
-        
-        <h2>Order Details</h2>
-        <p><strong>Transaction Reference:</strong>your reference transaction no: ${amount}</p>
-        <p><strong>Amount Paid:</strong> ${currency} ${reference}</p>
-        
-        <p><strong>Event:</strong> ${ticketDetails.eventName}</p>
-        <p><strong>Tickets Purchased:</strong> ${ticketDetails.quantity}</p>
-        
-        <p>Your tickets for ${ticketDetails.eventName} are now attach in your user dashboard.</p>
-        <p>Thank you,<br>The Eventra Team</p>
-      </div>
-      </body>
-    </html>
-  `;
+        ${ticketButtonHTML}
+
+
+      <div
+        style="
+          background-color: #f3f6f8;
+          padding: 10px;
+          border-radius: 8px;
+          margin: 20px 0;
+        "
+      >
+        
+        
+        <h2>Order Details</h2>
+        
+                <p><strong>Transaction Reference:</strong> ${reference}</p>
+        <p><strong>Amount Paid:</strong> ${currency} ${amount}</p>
+        
+        <p><strong>Event:</strong> ${ticketDetails.eventName}</p>
+        <p><strong>Tickets Purchased:</strong> ${ticketDetails.quantity}</p>
+        
+        <p>Your tickets for ${ticketDetails.eventName} are now attached in your user dashboard.</p>
+        <p>Thank you,<br>The Eventra Team</p>
+      </div>
+
+      </body>
+    </html>
+  `;
 };
 
 const  sendUserTicket = ( 

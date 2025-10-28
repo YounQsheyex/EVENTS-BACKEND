@@ -287,7 +287,7 @@ const handlePaymentVerification = async (req, res, next) => {
 
         try {
             const confirmationEmailPromise = sendPaymentConfirmationEmail({
-            email: payment.email,
+            email: user.email,
             lastname: user.lastname,
             reference: payment.reference,
             amount: payment.amount,
