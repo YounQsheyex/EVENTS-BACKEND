@@ -1,5 +1,12 @@
 const redisConfig = require("../helpers/redis");
 const Notification = require("../models/notificationSchema");
+const { getIO } = require("../helpers/socketio.js");
+const io = getIO();
+
+exports.sendAdminNotification = async (req, res) => {
+  io.to("admins").emit("notification", { msg: "New ticket purchase!" });
+  res.status(200).json({ success: true, message: "Notified admins" });
+};
 
 const createNotification = async (req, res, next) => {
   try {
@@ -38,6 +45,20 @@ const getAllNotifications = async (req, res, next) => {
         success: false,
         message: "No Notification found",
       });
+
+    io.to("admins").emit("roomMessage", {
+      user: "System",
+      title: "New Registration",
+      content: "Notifications work perfectly well",
+      about: "Eventra Event Organization",
+      createdAt: Date.now(),
+    });
+
+    io.to("admins").emit("roomMessage", {
+      user: "System",
+      title: "New Payment",
+      content: "A user just paid for Tech Summit 2025",
+    });
 
     res.status(200).json({
       success: true,

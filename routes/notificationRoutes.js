@@ -3,13 +3,11 @@ const {
   deleteNotification,
   getAllUnreadNotifications,
   getAllNotifications,
-  createNotification,
   markAsRead,
 } = require("../controllers/notifications");
 const { isUser, isAdmin, isSuperAdmin } = require("../middleware/auth");
 const cache = require("../middleware/redisMiddleware");
 
-router.post("/create", isUser, isAdmin, createNotification);
 router.get(
   "/",
   isUser,

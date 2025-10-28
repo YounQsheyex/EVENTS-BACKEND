@@ -1,6 +1,10 @@
 require("dotenv").config();
 const express = require("express");
+const http = require("http");
 const app = express();
+const server = http.createServer(app);
+const { init } = require("./helpers/socketio.js"); // import your socket module
+const io = init(server); // initialize socket.io
 const cors = require("cors");
 const mongoose = require("mongoose");
 const fileupload = require("express-fileupload");
@@ -34,6 +38,10 @@ const redisConfig = require("./helpers/redis");
 // middleware
 app.use(express.json());
 app.use(cors());
+const jwt = require("jsonwebtoken");
+const token = jwt.sign({ id: 1, name: "Ezekiel", admin: true }, "supersecret");
+const token2 = jwt.sign({ id: 1, name: "Matthew", admin: true }, "supersecret");
+console.log(token, token2);
 
 app.use(
   session({
@@ -78,6 +86,50 @@ app.use("/auth", googleRoutes);
 app.use("/api/testimonials", testimonialRoutes);
 app.use("/api/contact", contactRoutes);
 
+// Middleware: runs before each socket connection
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+
+  try {
+    if (!token) return next(new Error("Missing token"));
+    const decoded = jwt.verify(token, "supersecret");
+
+    socket.user = decoded; // attach user data
+    next();
+  } catch (err) {
+    next(new Error("Invalid token"));
+  }
+});
+
+io.on("connection", (socket) => {
+  console.log(`User connected: ${socket.id} (${socket.user.name})`);
+
+  socket.on("joinRoom", (room) => {
+    if (room !== "admins") {
+      const err = new Error(
+        `Dear ${socket.user.name}, You are not allowed to join this room`
+      );
+      socket.emit("error", err.message); // trigger the error event
+      return;
+    }
+
+    socket.join(room);
+    io.to(room).emit("joinRoom", `${socket.user.name} joined ${room}`);
+  });
+
+  socket.on("roomMessage", ({ room, obj }) => {
+    console.log("obj: ", obj);
+    io.to(room).emit("roomMessage", {
+      user: socket.user.name,
+      ...obj,
+    });
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`${socket.user.name} disconnected`);
+  });
+});
+
 // error routes
 app.use("/", (req, res) => {
   res.status(404).json({ success: false, message: "ROUTE NOT FOUND" });
@@ -87,6 +139,9 @@ app.use(errorMiddleware);
 
 const startServer = async () => {
   try {
+    server.listen(8080, () => {
+      console.log("Listening on http://localhost:8080");
+    });
     redisConfig.flushall("ASYNC");
     await mongoose.connect(process.env.MONGO_URL, { dbName: "EVENTS-DB" });
     app.listen(PORT, () => {
