@@ -144,6 +144,24 @@ EventSchema.index(
   { unique: true, collation: { locale: "en", strength: 2 } } // makes it case-insensitive ,
 );
 
+// Prevent creating events with past start or end dates
+EventSchema.pre("save", function (next) {
+  const now = new Date();
+
+  // Disallow startDate before now
+  if (this.startDate && this.startDate < now) {
+    return next(new Error("Start date cannot be in the past."));
+  }
+
+  // Disallow endDate before startDate
+  if (this.endDate && this.endDate < this.startDate) {
+    return next(new Error("End date cannot be earlier than start date."));
+  }
+
+  next();
+});
+
+
 const EVENTS = mongoose.model("Eventra", EventSchema);
 
 module.exports = EVENTS;

@@ -578,6 +578,125 @@ payment: {
         next(error);
     }
 };
+const handleAllTransactions = async (req, res, next) => {
+    try {
+        const transactions = await paymentSchema.aggregate([
+            // 1. Lookup User Details
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "user",
+                    foreignField: "_id",
+                    as: "user"
+                }
+            },
+            { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+            
+            // 2. Lookup Ticket Instances
+            {
+                $lookup: {
+                    from: "ticketinstances", 
+                    localField: "ticketInstances",
+                    foreignField: "_id",
+                    as: "ticketInstances"
+                }
+            },
+            
+            // 3. Lookup the Parent Event
+           {
+                $lookup: {
+                    from: "eventras", // ⬅️ Use the CONFIRMED collection name (e.g., "eventras")
+                    let: { eventId: "$event" }, // Capture the payment's event ID
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    // Cast the payment's event ID to ObjectId for a strict match
+                                    $eq: ["$_id", { $toObjectId: "$$eventId" }] 
+                                }
+                            }
+                        },
+                        { $project: { _id: 1, title: 1, eventDate: 1, tickets: 1 } } // Project necessary fields
+                    ],
+                    as: "eventDetails"
+                }
+                },
+                { $unwind: { path: "$eventDetails", preserveNullAndEmptyArrays: true } },
+
+            // 4. Project and Filter (Extract the correct embedded ticket)
+            {
+                $project: {
+                    _id: 1,
+                    reference: 1,
+                    amount: 1,
+                    quantity: 1,
+                    status: 1,
+                    paidAt: 1,
+                    createdAt: 1,
+                    
+                    user: {
+                        _id: "$user._id",
+                        firstname: "$user.firstname",
+                        lastname: "$user.lastname",
+                        email: "$user.email"
+                    },
+
+                    ticketInstances: {
+                        $map: {
+                            input: "$ticketInstances",
+                            as: "t",
+                            in: {
+                                _id: "$$t._id",
+                                ticketNumber: "$$t.ticketNumber",
+                                ticketToken: "$$t.ticketToken",
+                                qrCode: "$$t.qrCode"
+                            }
+                        }
+                    },
+
+                    // ⬅️ FIX APPLIED HERE: Use $toObjectId on the stored ID
+                    ticketType: {
+                        $arrayElemAt: [
+                            {
+                                $filter: {
+                                    input: "$eventDetails.tickets",
+                                    as: "ticket",
+                                    cond: { 
+                                        $eq: [
+                                            "$$ticket._id", 
+                                            { $toObjectId: "$ticket" } // Ensures type match
+                                        ] 
+                                    }
+                                }
+                            },
+                            0
+                        ]
+                    },
+
+                    event: {
+                        _id: "$eventDetails._id",
+                        title: "$eventDetails.title",
+                        eventDate: "$eventDetails.eventDate"
+                    }
+                }
+            },
+            
+            // 5. Sort by creation date
+            { $sort: { createdAt: -1 } }
+        ]);
+
+        res.status(200).json({
+            status: "success",
+            results: transactions.length,
+            data: {
+                transactions,
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 
 const handleAllTickets = async (req, res, next) => {
     // Extract query parameters for global search and filtering
