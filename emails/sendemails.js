@@ -3,7 +3,7 @@ const {
   createWelcomeEmail,
   resetEmailTemplate,
   PaymentComfirmationEmail,
-  verifyItYouEmail,
+  sendUserTicket,
   createAdminEmail,
 } = require("./emailtemplate");
 const sgMail = require("@sendgrid/mail");
@@ -15,7 +15,7 @@ const sendEmail = async ({ to, subject, html }) => {
     to,
     from: process.env.EMAIL, // must be a verified sender in SendGrid
     subject,
-    html,
+    html
   };
 
   try {
@@ -83,53 +83,21 @@ const sendResetEmail = async ({ firstname, clientUrl, email }) => {
 
 const sendPaymentConfirmationEmail = async ({
   email,
-  firstname,
-  reference,
-  amount,
-  currency,
-  ticketDetails,
-}) => {
-  const subject = "Your Purchase Confirmation & Ticket Details";
-  const html = PaymentComfirmationEmail(
-    firstname,
-    reference,
-    amount,
-    currency,
-    ticketDetails
-  );
-
-  sendEmail({
-    to: email,
-    subject,
-    html,
-  });
-};
-
-module.exports = {
-  sendWelcomeEmail,
-  sendResetEmail,
-  sendPaymentConfirmationEmail,
-};
-const sendVerifyPaymentlink = async ({
-  email,
   lastname,
   reference,
   amount,
-  status,
   currency,
   ticketDetails,
-  verificationLink,
+  event
 }) => {
-  const subject = "Your Purchase Confirmation & Ticket Details";
-  const html = verifyItYouEmail(
-    email,
+  const subject = "Your Purchase Confirmation ";
+  const html = PaymentComfirmationEmail(
     lastname,
     reference,
     amount,
-    status,
     currency,
     ticketDetails,
-    verificationLink
+    email
   );
 
   sendEmail({
@@ -139,10 +107,38 @@ const sendVerifyPaymentlink = async ({
   });
 };
 
+// module.exports = {
+//   sendWelcomeEmail,
+//   sendResetEmail,
+//   sendPaymentConfirmationEmail,
+// };
+const sendTicket = async ({
+    email,
+    lastname,
+    ticketDetails,
+    account,
+}) => {
+    const subject = "Eventra Ticket Details";
+    
+   
+    // --- 2. Generate HTML with CID Reference ---
+    const html = sendUserTicket(
+        lastname,      
+        ticketDetails,
+        account,
+    );
+
+    // --- 3. Send Email with Attachments ---
+    sendEmail({
+        to: email,
+        subject,
+        html,
+    });
+};
 module.exports = {
   sendWelcomeEmail,
   sendResetEmail,
   sendPaymentConfirmationEmail,
-  sendVerifyPaymentlink,
+  sendTicket,
   sendAdminEmail,
 };

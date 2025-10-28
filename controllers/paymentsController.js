@@ -8,9 +8,10 @@ const paystack = require("paystack")(process.env.PAYSTACK_SECRET_KEY);
 // const { processSuccessfulPayment } = require("../helpers/verifyPaymentSuccess");
 const {
   sendPaymentConfirmationEmail,
-  sendVerifyPaymentlink,
+  sendTicket,
 } = require("../emails/sendemails");
 const { generateTicketInstances } = require("../helpers/ticketInstance");
+const redirectToFrontend = require("../helpers/redirect")
 
 const baseUrl = process.env.BACKEND_URL.replace(/\/$/, "");
 
@@ -92,7 +93,7 @@ const handlePaymentInitialization = async (req, res, next) => {
             email,
             amount: totalAmount * 100, // Convert to kobo
             reference: reference,
-            callback_url: `${baseUrl}/api/payments/verify`,
+            callback_url: `${process.env.BACKEND_URL_TEST}/api/payments/verify`,
             metadata: {
                 user: userId,
                 email:email,
@@ -166,14 +167,10 @@ const handlePaymentVerification = async (req, res, next) => {
             const existingPayment = await paymentSchema.findOne({ reference });
 
             if (!existingPayment) {
-                return res.status(404).json({ status: "fail", message: "Payment record not found." });
+                return redirectToFrontend(res, 'not_found', reference);
             }
             // Already finalized
-            return res.status(200).json({
-                status: "success",
-                message: `Transaction already finalized with status: ${existingPayment.status}`,
-                data: { reference: existingPayment.reference, status: existingPayment.status },
-            });
+                return redirectToFrontend(res, existingPayment.status, reference);
         }
 
         // --- 2. Paystack API Verification ---
@@ -183,18 +180,17 @@ const handlePaymentVerification = async (req, res, next) => {
         if (!transactionResult || !data || data.status !== "success") {
             await paymentSchema.findOneAndUpdate({ reference }, { status: "failed", verificationData: data });
             const paystackMessage = transactionResult ? transactionResult.message || "Transaction failed or pending" : "Paystack returned an invalid response.";
-            return res.status(400).json({ status: "fail", message: `Verification Failed: ${paystackMessage}` });
+           return redirectToFrontend(res, finalStatus, reference);
         }
 
         // --- 3. CRITICAL SECURITY CHECK: AMOUNT CONSISTENCY ---
-        // ⚠️ NOTE: We must compare the payment.amount (stored in Naira/Base unit) 
-        // against Paystack's data.amount (stored in Kobo/Cents) * 100
+        
         const expectedAmountKobo = (payment.amount * 100).toFixed(0); 
         
         if (data.amount.toString() !== expectedAmountKobo.toString()) {
             console.error(`Amount Mismatch: Expected ${expectedAmountKobo} kobo, Received ${data.amount} kobo`);
             await paymentSchema.findOneAndUpdate({ reference }, { status: "amount_mismatch", verificationData: data });
-            return res.status(400).json({ status: "fail", message: "Security Error: Amount paid does not match expected amount." });
+            return redirectToFrontend(res, finalStatus, reference);
         }
         
         // --- 4. Data Lookup (User and Event) ---
@@ -208,7 +204,7 @@ const handlePaymentVerification = async (req, res, next) => {
 
         if (!user || !event) {
             await paymentSchema.findOneAndUpdate({ reference }, { status: "review_required" });
-            return res.status(404).json({ status: "fail", message: "Ticket or User data missing (DB inconsistency)." });
+           return redirectToFrontend(res, finalStatus, reference);
         }
         const specificTicket = event.tickets.id(ticketId);
 
@@ -229,14 +225,14 @@ const handlePaymentVerification = async (req, res, next) => {
                 {
                     $inc: { "tickets.$.quantityAvailable": -purchasedQuantity } // Decrement
                 },
-                { new: true, session } // ⬅️ CRITICAL: Use session
+                { new: true, session } 
             );
 
             if (!updatedEvent) {
                 await session.abortTransaction(); 
                 finalStatus = 'inventory_error';
                 await paymentSchema.findOneAndUpdate({ reference }, { status: finalStatus, verificationData: data });
-                return res.status(409).json({ status: "fail", message: "Ticket inventory sold out. Contact support." });
+                return redirectToFrontend(res, finalStatus, reference);
             }
 
             // B. TICKET INSTANCE CREATION (Uses specificTicket from event)
@@ -276,6 +272,7 @@ const handlePaymentVerification = async (req, res, next) => {
             generatedTickets: generatedTickets.map((t) => ({
                 number: t.ticketNumber,
                 token: t.ticketToken,
+                qrCodeBase64:t.qrCode
             })),
         };
         const clientTicketSummary = {
@@ -289,51 +286,41 @@ const handlePaymentVerification = async (req, res, next) => {
         const currency = transactionResult.data.currency;
 
         try {
-             await sendPaymentConfirmationEmail({
-                email: payment.email,
-                lastname: user.lastname,
-                reference: payment.reference,
-                amount: payment.amount,
-                status: payment.status,
-                currency: currency,
-                ticketDetails: emailTicketDetails,
-             });
+            const confirmationEmailPromise = sendPaymentConfirmationEmail({
+            email: payment.email,
+            lastname: user.lastname,
+            reference: payment.reference,
+            amount: payment.amount,
+            currency: currency,
+            status: payment.status,
+            
+            ticketDetails: emailTicketDetails,
+            event: event.title
+        });
+
+        const ticketEmailPromise = sendTicket({
+            email: payment.email,
+            lastname:payment.lastname,
+            account: user.email,
+            amount: payment.amount,
+            currency: currency,
+            event: event,
+            ticketDetails: emailTicketDetails,
+            reference: reference,
+        });
+
+            await Promise.all([confirmationEmailPromise, ticketEmailPromise]);
+
         } catch (emailError) {
-            res.status(200).json({
-                success: "false",
-                message: "Failed to send confirmation email but payment was successful",
-            });
-            console.error("Failed to send confirmation email:", emailError);
+            // return redirectToFrontend(res, finalStatus, reference);
+            console.error("One or more customer emails failed to send:", emailError);
         }
 
-        return res.status(200).json({
-            status: "success",
-            message: "Transaction verified and tickets generated successfully",
-            data: {
-                // --- Payment Details ---
-                email: payment.email, // Added from your update
-                reference: payment.reference,
-                amount: payment.amount,
-                currency: currency,
-                status: payment.status,
-                paidAt: payment.paidAt,
-                
-                // --- Summary of Purchase ---
-                ticketDetails: clientTicketSummary,
-                
-                // --- Individual Ticket Instances ---
-                tickets: generatedTickets.map((t) => ({
-                    _id: t._id,
-                    number: t.ticketNumber,
-                    token: t.ticketToken,
-                    // qrcode: t?.qrCode 
-                })),
-            }
-
-     });
+        return redirectToFrontend(res, 'success', reference, ticketId)
     } catch (error) {
         console.error("Payment verification error:", error); 
-        next(error);
+       const currentStatus = finalStatus === 'error' && payment ? payment.status : finalStatus;
+        return redirectToFrontend(res, currentStatus, reference);
     }
 };
 
@@ -370,7 +357,7 @@ const handleAllTransactions = async (req, res, next) => {
             // 3. Lookup the Parent Event
            {
                 $lookup: {
-                    from: "eventras", // ⬅️ Use the CONFIRMED collection name (e.g., "eventras")
+                    from: "eventras",
                     let: { eventId: "$event" }, // Capture the payment's event ID
                     pipeline: [
                         {
@@ -441,7 +428,7 @@ const handleAllTransactions = async (req, res, next) => {
                     event: {
                         _id: "$eventDetails._id",
                         title: "$eventDetails.title",
-                        eventDate: "$eventDetails.eventDate"
+                        eventDate: "$eventDetails.startTime"
                     }
                 }
             },
@@ -592,6 +579,159 @@ payment: {
     }
 };
 
+const handleAllTickets = async (req, res, next) => {
+    // Extract query parameters for global search and filtering
+    const { status, search } = req.query;
+
+    try {
+        let matchQuery = {}; // Start with an empty match query to find ALL tickets
+
+        // 1. Status Filtering
+        if (status) {
+            matchQuery.status = status;
+        }
+
+        // 2. Text Search Filtering
+        if (search) {
+            const searchRegex = new RegExp(search, 'i');
+            // Check if matchQuery is empty to decide how to apply $or
+            const searchCriteria = {
+                $or: [
+                    { ticketNumber: { $regex: searchRegex } },
+                    { ticketToken: { $regex: searchRegex } },
+                    { attendeeName: { $regex: searchRegex } }
+                ]
+            };
+            
+            // Merge status filter with search criteria if status exists
+            matchQuery = Object.keys(matchQuery).length > 0 
+                ? { ...matchQuery, ...searchCriteria }
+                : searchCriteria;
+        }
+
+        const allTickets = await ticketInstanceSchema.aggregate([
+            // STAGE 1: Filter by Query Parameters (Status/Search)
+            { $match: matchQuery },
+            
+            // STAGE 2: Lookup USER Details (New for this 'All' endpoint)
+            {
+                $lookup: {
+                    from: "users", // Assuming 'users' is the User collection name
+                    localField: "user",
+                    foreignField: "_id",
+                    as: "userDetails"
+                }
+            },
+            { $unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true } },
+
+            // STAGE 3: Lookup Payment Details (reference, amount, quantity, etc.)
+            {
+                $lookup: {
+                    from: "ticketpayments", 
+                    localField: "payment",
+                    foreignField: "_id",
+                    as: "paymentDetails"
+                }
+            },
+            { $unwind: { path: "$paymentDetails", preserveNullAndEmptyArrays: true } },
+
+            // STAGE 4: Lookup Parent Event Details
+            {
+                $lookup: {
+                    from: "eventras", // Eventra collection name
+                    localField: "event",
+                    foreignField: "_id",
+                    as: "eventDetails"
+                }
+            },
+            { $unwind: { path: "$eventDetails", preserveNullAndEmptyArrays: true } },
+
+            // STAGE 5: Lookup the Embedded Ticket Type Subdocument
+            {
+                $addFields: {
+                    ticketTypeDetails: {
+                        $arrayElemAt: [
+                            {
+                                $filter: {
+                                    input: "$eventDetails.tickets",
+                                    as: "ticket",
+                                    cond: { $eq: ["$$ticket._id", "$ticketType"] } 
+                                }
+                            },
+                            0
+                        ]
+                    }
+                }
+            },
+
+            // STAGE 6: Project the final output structure
+            {
+                $project: {
+                    _id: 1,
+                    ticketNumber: 1,
+                    ticketToken: 1,
+                    status: 1,
+                    attendeeName: 1,
+                    qrCode: 1,
+                    attendeeEmail: 1,
+                    createdAt: 1,
+                    
+                    // User Fields (ADDED)
+                    user: {
+                        _id: "$userDetails._id",
+                        firstname: "$userDetails.firstname",
+                        lastname: "$userDetails.lastname",
+                        email: "$userDetails.email"
+                    },
+
+                    // Event Fields
+                    event: {
+                        _id: "$eventDetails._id",
+                        title: "$eventDetails.title",
+                        eventDate: "$eventDetails.eventDate",
+                        location: "$eventDetails.address",
+                        category: "$eventDetails.category",
+                        eventStart: "$eventDetails.startTime",
+                        eventEnd: "$eventDetails.endTime",
+                        eventImage: "$eventDetails.image",
+                    },
+
+                    // Ticket Type Fields
+                    ticketType: {
+                        _id: "$ticketTypeDetails._id",
+                        name: "$ticketTypeDetails.name",
+                        type: "$ticketTypeDetails.type",
+                        price: "$ticketTypeDetails.price",
+                    },
+
+                    // Payment Fields
+                    payment: {
+                        quantity: "$paymentDetails.quantity",
+                        amount: "$paymentDetails.amount",
+                        reference: "$paymentDetails.reference",
+                        paidAt: "$paymentDetails.paidAt",
+                        email: "$paymentDetails.email",
+                    },
+                }
+            },
+            
+            // STAGE 7: Sort
+            { $sort: { createdAt: -1 } }
+        ]);
+
+        res.status(200).json({
+            status: "success",
+            results: allTickets.length,
+            data: {
+                tickets: allTickets,
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+
 const getSalesOverview = async (req, res, next) => {
     try {
         // Calculate the date 30 days ago
@@ -679,4 +819,5 @@ module.exports = {
   handleAllTransactions,
   handleUserTicket,
   getSalesOverview, 
+  handleAllTickets
 };
