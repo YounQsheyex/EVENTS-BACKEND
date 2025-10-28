@@ -69,10 +69,10 @@ app.use("/api/auth", userRoutes);
 app.use("/api/eventra", eventraRoutes);
 // make use of errorMiddleware as backup if ever any error occurs in any event route.
 app.use("/api/events", eventRoutes);
-app.use("/api/tickets", ticketRoutes);
+// app.use("/api/tickets", ticketRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/qrcode", verifyQrcode);
-app.use("/api/webhook", webhookRoutes);
+// app.use("/api/webhook", webhookRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/auth", googleRoutes);
 app.use("/api/testimonials", testimonialRoutes);
