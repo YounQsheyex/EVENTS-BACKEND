@@ -35,6 +35,40 @@ const createEvents = async (req, res) => {
     return res.status(400).json({ message: "Please fill all fields" });
   }
   try {
+    // Prevent past date/time creation
+    const now = new Date();
+    const eventStart = new Date(startDate);
+    const eventEnd = new Date(endDate);
+
+    // If the event starts today, check that the start time is not in the past
+    if (eventStart.toDateString() === now.toDateString()) {
+      const [startHour, startMinute] = startTime.split(":").map(Number);
+      const eventStartTime = new Date(eventStart);
+      eventStartTime.setHours(startHour, startMinute, 0, 0);
+
+      if (eventStartTime < now) {
+        return res.status(400).json({
+          success: false,
+          message: "Start time cannot be in the past.",
+        });
+      }
+    }
+
+    // General date validation
+    if (eventStart < now) {
+      return res.status(400).json({
+        success: false,
+        message: "Start date cannot be in the past.",
+      });
+    }
+
+    if (eventEnd < eventStart) {
+      return res.status(400).json({
+        success: false,
+        message: "End date cannot be before start date.",
+      });
+    }
+
     if (!["admin", "superAdmin"].includes(req.user.role)) {
       return res
         .status(403)
@@ -191,6 +225,40 @@ const updateEvent = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+
+    // Prevent past date/time creation
+    const now = new Date();
+    const eventStart = new Date(startDate);
+    const eventEnd = new Date(endDate);
+
+    // If the event starts today, check that the start time is not in the past
+    if (eventStart.toDateString() === now.toDateString()) {
+      const [startHour, startMinute] = startTime.split(":").map(Number);
+      const eventStartTime = new Date(eventStart);
+      eventStartTime.setHours(startHour, startMinute, 0, 0);
+
+      if (eventStartTime < now) {
+        return res.status(400).json({
+          success: false,
+          message: "Start time cannot be in the past.",
+        });
+      }
+    }
+
+    // General date validation
+    if (eventStart < now) {
+      return res.status(400).json({
+        success: false,
+        message: "Start date cannot be in the past.",
+      });
+    }
+
+    if (eventEnd < eventStart) {
+      return res.status(400).json({
+        success: false,
+        message: "End date cannot be before start date.",
+      });
+    }
 
     //  Only admins or superAdmins can update
     if (!["admin", "superAdmin"].includes(req.user.role)) {
