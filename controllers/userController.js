@@ -125,6 +125,7 @@ const userLogin = async (req, res) => {
         lastname: user.lastname,
         role: user.role,
         phoneNumber: user.phoneNumber,
+        profilePicture: user.profilePicture,
       },
     });
   } catch (error) {
