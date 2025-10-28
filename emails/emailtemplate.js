@@ -323,7 +323,7 @@ const PaymentComfirmationEmail = (
   const ticketButtonHTML = `
         <div style="text-align: center; margin: 30px 0;">
             <a href="${ticketUrl}" 
-               target="_blank" 
+              clicktracking="off" target="_blank" 
                style="
                   display: inline-block; 
                   padding: 12px 25px; 
@@ -341,8 +341,7 @@ const PaymentComfirmationEmail = (
             </p>
         </div>
     `;
-  // You should convert the amount from the subunit (e.g. kobo) to the major unit (e.g. Naira) here.
-  // const displayAmount = (amount / 100).toFixed(2);
+  const displayAmount = (amount).toFixed(2);
 
   return `
     <html>
@@ -393,7 +392,7 @@ const PaymentComfirmationEmail = (
         <h2>Order Details</h2>
         
                 <p><strong>Transaction Reference:</strong> ${reference}</p>
-        <p><strong>Amount Paid:</strong> ${currency} ${amount}</p>
+        <p><strong>Amount Paid:</strong> ${currency} ${displayAmount}</p>
         
         <p><strong>Event:</strong> ${ticketDetails.eventName}</p>
         <p><strong>Tickets Purchased:</strong> ${ticketDetails.quantity}</p>
@@ -428,6 +427,7 @@ const  sendUserTicket = (
             : ticket.qrCodeBase64; // Use it as is if the prefix is not found
         
         // Use rawBase64 in the <img> tag
+        
         return `
         <li style="padding: 10px 0; border-bottom: 1px dashed #ccc; margin-bottom: 10px;"> 
             <strong>Ticket No:</strong> ${ticket.number} <br>
