@@ -90,23 +90,21 @@ io.on("connection", (socket) => {
   socket.emit("connected", socket.user);
   console.log(`User connected: ${socket.id} (${socket.user.firstname})`);
 
-  socket.on("joinRoom", (room) => {
-    console.log("room: ", room);
+  socket.on("adminRoom", (room) => {
     if (room !== "admin") {
       const err = new Error(
-        `Dear ${socket.user.firstname}, You are not allowed to join this room`
+        `Dear ${socket.user.firstname}, You are not allowed to join this chat room.`
       );
       socket.emit("error", err.message); // trigger the error event
       return;
     }
 
     socket.join(room);
-    io.to(room).emit("joinRoom", `${socket.user.firstname} joined ${room}`);
+    io.to(room).emit("adminRoom", `${socket.user.firstname} joined ${room}`);
   });
 
-  socket.on("roomMessage", ({ room, obj }) => {
-    console.log("obj: ", obj);
-    io.to(room).emit("roomMessage", {
+  socket.on("adminMessage", ({ room, obj }) => {
+    io.to(room).emit("adminMessage", {
       user: socket.user.firstname,
       ...obj,
     });
