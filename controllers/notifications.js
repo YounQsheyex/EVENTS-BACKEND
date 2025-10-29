@@ -1,9 +1,11 @@
 const redisConfig = require("../helpers/redis");
 const Notification = require("../models/notificationSchema");
+const { getIO } = require("../helpers/socketio.js");
+const io = getIO();
 
-const createNotification = async (req, res, next) => {
+const createNotification = async (body) => {
   try {
-    const { title, content, about } = req.body;
+    const { title, content, about } = body;
 
     if (!title || !content || !about)
       return res.status(400).json({
@@ -19,14 +21,29 @@ const createNotification = async (req, res, next) => {
 
     await redisConfig.flushall("ASYNC");
 
-    res.status(201).json({
-      success: true,
-      message: "Notification created successfully",
-      notification: newNotification,
-    });
+    return { success: true };
   } catch (error) {
-    next(error);
+    const err = new Error(error);
+    return { success: false, message: err.message };
   }
+};
+
+const makeMessage = async (
+  msgObj = {
+    title: "New Registration",
+    content: "Notifications work perfectly well",
+    about: "Eventra Event Organization",
+  }
+) => {
+  const createdNotify = await createNotification(msgObj);
+  if (!createdNotify.success) return createdNotify.message;
+
+  console.log("Message sent and notification created successfully.");
+  io.to("admin").emit("roomMessage", {
+    user: "EVENTRA API",
+    ...msgObj,
+    createdAt: Date.now(),
+  });
 };
 
 const getAllNotifications = async (req, res, next) => {
@@ -38,6 +55,8 @@ const getAllNotifications = async (req, res, next) => {
         success: false,
         message: "No Notification found",
       });
+
+    await makeMessage();
 
     res.status(200).json({
       success: true,
@@ -143,7 +162,7 @@ const deleteNotification = async (req, res, next) => {
 };
 
 module.exports = {
-  createNotification,
+  makeMessage,
   markAsRead,
   getAllNotifications,
   getAllUnreadNotifications,
