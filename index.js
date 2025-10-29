@@ -1,6 +1,10 @@
 require("dotenv").config();
 const express = require("express");
+const http = require("http");
 const app = express();
+const server = http.createServer(app);
+const { init } = require("./helpers/socketio.js"); // import your socket module
+const io = init(server); // initialize socket.io
 const cors = require("cors");
 const mongoose = require("mongoose");
 const fileupload = require("express-fileupload");
@@ -30,11 +34,12 @@ const errorMiddleware = require("./middleware/error");
 // Import arcjet middleware to handle rate limiting throughout the API.
 const arcjetMiddleware = require("./middleware/arjectMiddleware");
 const redisConfig = require("./helpers/redis");
+const socketAuth = require("./middleware/socketMiddleware.js");
+const { isUser } = require("./middleware/auth.js");
 
 // middleware
 app.use(express.json());
 app.use(cors());
-
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "secret",
@@ -69,14 +74,46 @@ app.use("/api/auth", userRoutes);
 app.use("/api/eventra", eventraRoutes);
 // make use of errorMiddleware as backup if ever any error occurs in any event route.
 app.use("/api/events", eventRoutes);
-// app.use("/api/tickets", ticketRoutes);
+app.use("/api/tickets", ticketRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/qrcode", verifyQrcode);
-// app.use("/api/webhook", webhookRoutes);
+app.use("/api/webhook", webhookRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/auth", googleRoutes);
 app.use("/api/testimonials", testimonialRoutes);
 app.use("/api/contact", contactRoutes);
+
+// Middleware: runs before each socket connection
+io.use(socketAuth(isUser));
+
+io.on("connection", (socket) => {
+  socket.emit("connected", socket.user);
+  console.log(`User connected: ${socket.id} (${socket.user.firstname})`);
+
+  socket.on("adminRoom", (room) => {
+    if (room !== "admin") {
+      const err = new Error(
+        `Dear ${socket.user.firstname}, You are not allowed to join this chat room.`
+      );
+      socket.emit("error", err.message); // trigger the error event
+      return;
+    }
+
+    socket.join(room);
+    io.to(room).emit("adminRoom", `${socket.user.firstname} joined ${room}`);
+  });
+
+  socket.on("adminMessage", ({ room, obj }) => {
+    io.to(room).emit("adminMessage", {
+      user: socket.user.firstname,
+      ...obj,
+    });
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`${socket.user.firstname} disconnected`);
+  });
+});
 
 // error routes
 app.use("/", (req, res) => {
@@ -87,6 +124,9 @@ app.use(errorMiddleware);
 
 const startServer = async () => {
   try {
+    server.listen(8080, () => {
+      console.log("Listening on http://localhost:8080");
+    });
     redisConfig.flushall("ASYNC");
     await mongoose.connect(process.env.MONGO_URL, { dbName: "EVENTS-DB" });
     app.listen(PORT, () => {
