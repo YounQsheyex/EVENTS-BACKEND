@@ -38,7 +38,8 @@ const makeMessage = async (
   const createdNotify = await createNotification(msgObj);
   if (!createdNotify.success) return createdNotify.message;
 
-  io.to("admins").emit("roomMessage", {
+  console.log("Message sent and notification created successfully.");
+  io.to("admin").emit("roomMessage", {
     user: "EVENTRA API",
     ...msgObj,
     createdAt: Date.now(),
@@ -54,6 +55,8 @@ const getAllNotifications = async (req, res, next) => {
         success: false,
         message: "No Notification found",
       });
+
+    await makeMessage();
 
     res.status(200).json({
       success: true,

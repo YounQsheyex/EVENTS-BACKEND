@@ -34,15 +34,12 @@ const errorMiddleware = require("./middleware/error");
 // Import arcjet middleware to handle rate limiting throughout the API.
 const arcjetMiddleware = require("./middleware/arjectMiddleware");
 const redisConfig = require("./helpers/redis");
+const socketAuth = require("./middleware/socketMiddleware.js");
+const { isUser } = require("./middleware/auth.js");
 
 // middleware
 app.use(express.json());
 app.use(cors());
-const jwt = require("jsonwebtoken");
-const token = jwt.sign({ id: 1, name: "Ezekiel", admin: true }, "supersecret");
-const token2 = jwt.sign({ id: 1, name: "Matthew", admin: true }, "supersecret");
-console.log(token, token2);
-
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "secret",
@@ -87,46 +84,36 @@ app.use("/api/testimonials", testimonialRoutes);
 app.use("/api/contact", contactRoutes);
 
 // Middleware: runs before each socket connection
-io.use((socket, next) => {
-  const token = socket.handshake.auth?.token;
-
-  try {
-    if (!token) return next(new Error("Missing token"));
-    const decoded = jwt.verify(token, "supersecret");
-
-    socket.user = decoded; // attach user data
-    next();
-  } catch (err) {
-    next(new Error("Invalid token"));
-  }
-});
+io.use(socketAuth(isUser));
 
 io.on("connection", (socket) => {
-  console.log(`User connected: ${socket.id} (${socket.user.name})`);
+  socket.emit("connected", socket.user);
+  console.log(`User connected: ${socket.id} (${socket.user.firstname})`);
 
   socket.on("joinRoom", (room) => {
-    if (room !== "admins") {
+    console.log("room: ", room);
+    if (room !== "admin") {
       const err = new Error(
-        `Dear ${socket.user.name}, You are not allowed to join this room`
+        `Dear ${socket.user.firstname}, You are not allowed to join this room`
       );
       socket.emit("error", err.message); // trigger the error event
       return;
     }
 
     socket.join(room);
-    io.to(room).emit("joinRoom", `${socket.user.name} joined ${room}`);
+    io.to(room).emit("joinRoom", `${socket.user.firstname} joined ${room}`);
   });
 
   socket.on("roomMessage", ({ room, obj }) => {
     console.log("obj: ", obj);
     io.to(room).emit("roomMessage", {
-      user: socket.user.name,
+      user: socket.user.firstname,
       ...obj,
     });
   });
 
   socket.on("disconnect", () => {
-    console.log(`${socket.user.name} disconnected`);
+    console.log(`${socket.user.firstname} disconnected`);
   });
 });
 
