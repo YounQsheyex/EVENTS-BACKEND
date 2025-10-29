@@ -47,7 +47,7 @@ const TicketSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      enum: ["Regular", "VIP", "VVIP"], // enforce ticket names
+      enum: ["Regular", "VIP", "VVIP"],
       required: true,
     },
     type: {
@@ -141,26 +141,39 @@ EventSchema.index(
     startTime: 1,
     endTime: 1,
   },
-  { unique: true, collation: { locale: "en", strength: 2 } } // makes it case-insensitive ,
+  { unique: true, collation: { locale: "en", strength: 2 } }
 );
 
-// Prevent creating events with past start or end dates
+// Helper function to combine date and time into a single Date object
+const combineDateAndTime = (date, timeStr) => {
+  const [hour, minute] = timeStr.split(":").map(Number);
+  const combined = new Date(date);
+  combined.setHours(hour, minute, 0, 0);
+  return combined;
+};
+
+// Validate dates and times before saving
 EventSchema.pre("save", function (next) {
   const now = new Date();
 
-  // Disallow startDate before now
-  if (this.startDate && this.startDate < now) {
-    return next(new Error("Start date cannot be in the past."));
+  // Combine date and time for accurate comparison
+  const eventStartDateTime = combineDateAndTime(this.startDate, this.startTime);
+  const eventEndDateTime = combineDateAndTime(this.endDate, this.endTime);
+
+  // 1. Disallow start date/time in the past
+  if (eventStartDateTime < now) {
+    return next(new Error("Event start date and time cannot be in the past."));
   }
 
-  // Disallow endDate before startDate
-  if (this.endDate && this.endDate < this.startDate) {
-    return next(new Error("End date cannot be earlier than start date."));
+  // 2. Disallow end date/time before start date/time
+  if (eventEndDateTime <= eventStartDateTime) {
+    return next(
+      new Error("Event end date and time must be after start date and time.")
+    );
   }
 
   next();
 });
-
 
 const EVENTS = mongoose.model("Eventra", EventSchema);
 
