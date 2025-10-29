@@ -1,18 +1,20 @@
-const router = require("express").Router()
+const router = require("express").Router();
 const {
   handlePaymentInitialization,
   handlePaymentVerification,
   handleAllTransactions,
   handleUserTicket,
-  getSalesOverview
-} = require("../controllers/paymentsController")
+  getSalesOverview,
+  handleAllTickets,
+} = require("../controllers/paymentsController");
 
-const { isAdmin, isUser } = require("../middleware/auth")
+const { isAdmin, isUser, isSuperAdmin } = require("../middleware/auth");
 
 router.post("/initialize/:ticketId", isUser, handlePaymentInitialization);
 router.get("/verify", handlePaymentVerification);
-router.get("/allTransactions",isUser, handleAllTransactions);
-router.get("/myTicket", isUser,handleUserTicket)
-router.get("/revenue", isUser,getSalesOverview)
+router.get("/allTransactions", isUser, isAdmin, handleAllTransactions);
+router.get("/myTicket", isUser, handleUserTicket);
+router.get("/allTicket", isUser, isAdmin, handleAllTickets);
+router.get("/revenue", isUser, isSuperAdmin, getSalesOverview);
 
 module.exports = router;

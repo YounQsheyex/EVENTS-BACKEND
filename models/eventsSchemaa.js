@@ -1,53 +1,15 @@
 const mongoose = require("mongoose");
-
-//  Convert any flexible time input → 24-hour format ("HH:mm")
-const parseFlexibleTimeTo24 = (timeStr) => {
-  if (!timeStr || typeof timeStr !== "string") return "";
-
-  const cleaned = timeStr.trim().toUpperCase();
-
-  //  Handle simple 24-hour input: "16:00" or "09:30"
-  if (/^\d{1,2}:\d{2}$/.test(cleaned)) {
-    const [hourStr, minute] = cleaned.split(":");
-    const hour = parseInt(hourStr, 10);
-    if (hour >= 0 && hour < 24) {
-      return `${hour.toString().padStart(2, "0")}:${minute}`;
-    }
-  }
-
-  //  Handle 12-hour input like "4:00PM", "04:30 am", "4:00 pm"
-  const match = cleaned.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-  if (!match) return ""; // Invalid format — safe fallback
-
-  let [, hourStr, minute, modifier] = match;
-  let hour = parseInt(hourStr, 10);
-
-  if (modifier) {
-    modifier = modifier.toUpperCase();
-    if (modifier === "PM" && hour < 12) hour += 12;
-    if (modifier === "AM" && hour === 12) hour = 0;
-  }
-
-  return `${hour.toString().padStart(2, "0")}:${minute}`;
-};
-
-// Convert 24-hour ("HH:mm") → 12-hour ("hh:mm AM/PM")
-const formatTimeToAmPm = (time) => {
-  if (!time || typeof time !== "string") return "";
-  const [hourStr, minute] = time.split(":");
-  let hour = parseInt(hourStr, 10);
-  if (isNaN(hour)) return time;
-
-  const ampm = hour >= 12 ? "PM" : "AM";
-  hour = hour % 12 || 12;
-  return `${hour}:${minute} ${ampm}`;
-};
+const {
+  combineDateAndTime,
+  parseFlexibleTimeTo24,
+  formatTimeToAmPm,
+} = require("../helpers/combineDateandTime");
 
 const TicketSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      enum: ["Regular", "VIP", "VVIP"], // enforce ticket names
+      enum: ["Regular", "VIP", "VVIP"],
       required: true,
     },
     type: {
@@ -57,17 +19,25 @@ const TicketSchema = new mongoose.Schema(
     },
     startDate: Date,
     endDate: Date,
+    status: {
+      type: String,
+      enum: ["Available", "Sold-out"],
+      default: "Available",
+    },
     price: {
       type: Number,
       default: 0,
+      min: [0, "Price cannot be negative"],
     },
     quantityAvailable: {
       type: Number,
       default: 0,
+      min: [0, "Quantity cannot be negative"],
     },
     maxPerOrder: {
       type: Number,
       default: 1,
+      min: [1, "Max per order must be at least 1"],
     },
   },
   { _id: true }
@@ -136,8 +106,88 @@ EventSchema.index(
     startTime: 1,
     endTime: 1,
   },
-  { unique: true, collation: { locale: "en", strength: 2 } } // makes it case-insensitive ,
+  { unique: true, collation: { locale: "en", strength: 2 } }
 );
+
+// Validate dates, times, and ticket prices before saving
+EventSchema.pre("save", function (next) {
+  const now = new Date();
+
+  // ===== EVENT DATE/TIME VALIDATION =====
+
+  // Combine date and time for accurate comparison
+  const eventStartDateTime = combineDateAndTime(this.startDate, this.startTime);
+  const eventEndDateTime = combineDateAndTime(this.endDate, this.endTime);
+
+  // Disallow start date/time in the past
+  if (eventStartDateTime < now) {
+    return next(new Error("Event start date and time cannot be in the past."));
+  }
+
+  // Disallow end date/time before start date/time
+  if (eventEndDateTime <= eventStartDateTime) {
+    return next(
+      new Error("Event end date and time must be after start date and time.")
+    );
+  }
+
+  // ===== TICKET PRICE VALIDATION ======
+
+  if (this.tickets && this.tickets.length > 0) {
+    // Validate free tickets have price = 0
+    for (const ticket of this.tickets) {
+      if (ticket.type === "free" && ticket.price !== 0) {
+        return next(
+          new Error(
+            `Ticket "${ticket.name}" is marked as free but has a non-zero price.`
+          )
+        );
+      }
+    }
+
+    // Extract prices for each ticket type (only for paid tickets)
+    const regularTicket = this.tickets.find(
+      (t) => t.name === "Regular" && t.type === "paid"
+    );
+    const vipTicket = this.tickets.find(
+      (t) => t.name === "VIP" && t.type === "paid"
+    );
+    const vvipTicket = this.tickets.find(
+      (t) => t.name === "VVIP" && t.type === "paid"
+    );
+
+    // Price Hierarchy: Regular ≤ VIP ≤ VVIP
+
+    // Regular price cannot be higher than VIP
+    if (regularTicket && vipTicket && regularTicket.price > vipTicket.price) {
+      return next(
+        new Error(
+          `Regular ticket price (${regularTicket.price}) cannot be higher than VIP ticket price (${vipTicket.price}).`
+        )
+      );
+    }
+
+    // Regular price cannot be higher than VVIP
+    if (regularTicket && vvipTicket && regularTicket.price > vvipTicket.price) {
+      return next(
+        new Error(
+          `Regular ticket price (${regularTicket.price}) cannot be higher than VVIP ticket price (${vvipTicket.price}).`
+        )
+      );
+    }
+
+    // VIP price cannot be higher than VVIP
+    if (vipTicket && vvipTicket && vipTicket.price > vvipTicket.price) {
+      return next(
+        new Error(
+          `VIP ticket price (${vipTicket.price}) cannot be higher than VVIP ticket price (${vvipTicket.price}).`
+        )
+      );
+    }
+  }
+
+  next();
+});
 
 const EVENTS = mongoose.model("Eventra", EventSchema);
 
