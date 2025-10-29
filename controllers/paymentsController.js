@@ -91,7 +91,7 @@ const handlePaymentInitialization = async (req, res, next) => {
       email,
       amount: totalAmount * 100, // Convert to kobo
       reference: reference,
-      callback_url: `${process.env.BACKEND_URL_TEST}/api/payments/verify`,
+      callback_url: `${baseUrl}/api/payments/verify`,
       metadata: {
         user: userId,
         email: email,
@@ -337,128 +337,138 @@ const handlePaymentVerification = async (req, res, next) => {
   }
 };
 
-// ... handleAllTransactions and handleUserTicket would need significant modification
 // to use aggregation ($lookup and $unwind) instead of population,
 // but the initial controllers are the priority.
 
-// const handleAllTransactions = async (req, res, next) => {
-//   try {
-//     const transactions = await paymentSchema.aggregate([
-//       // 1. Lookup User Details
-//       {
-//         $lookup: {
-//           from: "users",
-//           localField: "user",
-//           foreignField: "_id",
-//           as: "user",
-//         },
-//       },
-//       { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+const handleAllTransactions = async (req, res, next) => {
+  try {
+    const transactions = await paymentSchema.aggregate([
+      // 1. Lookup User Details
+      {
+        $lookup: {
+          from: "users",
+          localField: "user",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
 
-//       // 2. Lookup Ticket Instances
-//       {
-//         $lookup: {
-//           from: "ticketinstances",
-//           localField: "ticketInstances",
-//           foreignField: "_id",
-//           as: "ticketInstances",
-//         },
-//       },
+      // 2. Lookup Ticket Instances
+      {
+        $lookup: {
+          from: "ticketinstances",
+          localField: "ticketInstances",
+          foreignField: "_id",
+          as: "ticketInstances",
+        },
+      },
 
-//       // 3. Lookup the Parent Event
-//       {
-//         $lookup: {
-//           from: "eventras",
-//           let: { eventId: "$event" }, // Capture the payment's event ID
-//           pipeline: [
-//             {
-//               $match: {
-//                 $expr: {
-//                   // Cast the payment's event ID to ObjectId for a strict match
-//                   $eq: ["$_id", { $toObjectId: "$$eventId" }],
-//                 },
-//               },
-//             },
-//             { $project: { _id: 1, title: 1, eventDate: 1, tickets: 1 } }, // Project necessary fields
-//           ],
-//           as: "eventDetails",
-//         },
-//       },
-//       { $unwind: { path: "$eventDetails", preserveNullAndEmptyArrays: true } },
+      // 3. Lookup the Parent Event
+      {
+        $lookup: {
+          from: "eventras",
+          let: { eventId: "$event" }, // Capture the payment's event ID
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  // Match event ID against the payment's event ID
+                  $eq: ["$_id", { $toObjectId: "$$eventId" }],
+                },
+              },
+            },
+            // FIX 1: Project the correct field (startDate) based on EventSchema
+            {
+              $project: {
+                _id: 1,
+                title: 1,
+                startDate: 1,
+                startTime: 1,
+                tickets: 1,
+              },
+            },
+          ],
+          as: "eventDetails",
+        },
+      },
+      { $unwind: { path: "$eventDetails", preserveNullAndEmptyArrays: true } },
 
-//       // 4. Project and Filter (Extract the correct embedded ticket)
-//       {
-//         $project: {
-//           _id: 1,
-//           reference: 1,
-//           amount: 1,
-//           quantity: 1,
-//           status: 1,
-//           paidAt: 1,
-//           createdAt: 1,
+      // 4. Project and Filter (Extract the correct embedded ticket and details)
+      {
+        $project: {
+          _id: 1,
+          reference: 1,
+          amount: 1,
+          quantity: 1,
+          status: 1,
+          paidAt: 1,
+          createdAt: 1,
 
-//           user: {
-//             _id: "$user._id",
-//             firstname: "$user.firstname",
-//             lastname: "$user.lastname",
-//             email: "$user.email",
-//           },
+          user: {
+            _id: "$user._id",
+            firstname: "$user.firstname",
+            lastname: "$user.lastname",
+            email: "$user.email",
+          },
 
-//           ticketInstances: {
-//             $map: {
-//               input: "$ticketInstances",
-//               as: "t",
-//               in: {
-//                 _id: "$$t._id",
-//                 ticketNumber: "$$t.ticketNumber",
-//                 ticketToken: "$$t.ticketToken",
-//                 qrCode: "$$t.qrCode",
-//               },
-//             },
-//           },
+          ticketInstances: {
+            $map: {
+              input: "$ticketInstances",
+              as: "t",
+              in: {
+                _id: "$$t._id",
+                ticketNumber: "$$t.ticketNumber",
+                ticketToken: "$$t.ticketToken",
+                qrCode: "$$t.qrCode",
+              },
+            },
+          },
 
-//           // ⬅️ FIX APPLIED HERE: Use $toObjectId on the stored ID
-//           ticketType: {
-//             $arrayElemAt: [
-//               {
-//                 $filter: {
-//                   input: "$eventDetails.tickets",
-//                   as: "ticket",
-//                   cond: {
-//                     $eq: [
-//                       "$$ticket._id",
-//                       { $toObjectId: "$ticket" }, // Ensures type match
-//                     ],
-//                   },
-//                 },
-//               },
-//               0,
-//             ],
-//           },
+          // 🔑 STABLE FIX: Assuming the payment document stores the ID of the ticket type under the 'ticket' field.
+          ticketType: {
+            $arrayElemAt: [
+              {
+                $filter: {
+                  input: "$eventDetails.tickets",
+                  as: "ticket",
+                  cond: {
+                    $eq: [
+                      "$$ticket._id",
+                      // This is the correct logic: use the 'ticket' field from the payment document
+                      { $toObjectId: "$ticket" },
+                    ],
+                  },
+                },
+              },
+              0,
+            ],
+          },
 
-//           event: {
-//             _id: "$eventDetails._id",
-//             title: "$eventDetails.title",
-//             eventDate: "$eventDetails.startTime",
-//           },
-//         },
-//       },
+          event: {
+            _id: "$eventDetails._id",
+            title: "$eventDetails.title",
+            // FIX 2: Use the existing and correctly retrieved 'startDate' field
+            eventDate: "$eventDetails.startDate",
+          },
+        },
+      },
 
-//       // 5. Sort by creation date
-//       { $sort: { createdAt: -1 } },
-//     ]);
+      // 5. Sort by creation date
+      { $sort: { createdAt: -1 } },
+    ]);
 
-//     res.status(200).json({
-//       status: "success",
-//       results: transactions.length,
-//       data: {
-//         transactions,
-//       },
-//     });
-//   } catch (error) {
-//     next(error);
-//   }
-// };
+    res.status(200).json({
+      status: "success",
+      results: transactions.length,
+      data: {
+        transactions,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 const handleUserTicket = async (req, res, next) => {
   // Robustly extract user ID from req.user
@@ -548,7 +558,7 @@ const handleUserTicket = async (req, res, next) => {
           event: {
             _id: "$eventDetails._id",
             title: "$eventDetails.title",
-            eventDate: "$eventDetails.eventDate",
+            eventDate: "$eventDetails.startDate",
             location: "$eventDetails.address", // ⬅️ NOTE: Using 'address' from EventSchema
             category: "$eventDetails.category",
             eventStart: "$eventDetails.startTime", // ⬅️ NOTE: Using 'startTime'
@@ -585,124 +595,6 @@ const handleUserTicket = async (req, res, next) => {
       results: userTickets.length,
       data: {
         tickets: userTickets, // Use the aggregated output directly
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-const handleAllTransactions = async (req, res, next) => {
-  try {
-    const transactions = await paymentSchema.aggregate([
-      // 1. Lookup User Details
-      {
-        $lookup: {
-          from: "users",
-          localField: "user",
-          foreignField: "_id",
-          as: "user",
-        },
-      },
-      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
-
-      // 2. Lookup Ticket Instances
-      {
-        $lookup: {
-          from: "ticketinstances",
-          localField: "ticketInstances",
-          foreignField: "_id",
-          as: "ticketInstances",
-        },
-      },
-
-      // 3. Lookup the Parent Event
-      {
-        $lookup: {
-          from: "eventras", // ⬅️ Use the CONFIRMED collection name (e.g., "eventras")
-          let: { eventId: "$event" }, // Capture the payment's event ID
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  // Cast the payment's event ID to ObjectId for a strict match
-                  $eq: ["$_id", { $toObjectId: "$$eventId" }],
-                },
-              },
-            },
-            { $project: { _id: 1, title: 1, eventDate: 1, tickets: 1 } }, // Project necessary fields
-          ],
-          as: "eventDetails",
-        },
-      },
-      { $unwind: { path: "$eventDetails", preserveNullAndEmptyArrays: true } },
-
-      // 4. Project and Filter (Extract the correct embedded ticket)
-      {
-        $project: {
-          _id: 1,
-          reference: 1,
-          amount: 1,
-          quantity: 1,
-          status: 1,
-          paidAt: 1,
-          createdAt: 1,
-
-          user: {
-            _id: "$user._id",
-            firstname: "$user.firstname",
-            lastname: "$user.lastname",
-            email: "$user.email",
-          },
-
-          ticketInstances: {
-            $map: {
-              input: "$ticketInstances",
-              as: "t",
-              in: {
-                _id: "$$t._id",
-                ticketNumber: "$$t.ticketNumber",
-                ticketToken: "$$t.ticketToken",
-                qrCode: "$$t.qrCode",
-              },
-            },
-          },
-
-          // ⬅️ FIX APPLIED HERE: Use $toObjectId on the stored ID
-          ticketType: {
-            $arrayElemAt: [
-              {
-                $filter: {
-                  input: "$eventDetails.tickets",
-                  as: "ticket",
-                  cond: {
-                    $eq: [
-                      "$$ticket._id",
-                      { $toObjectId: "$ticket" }, // Ensures type match
-                    ],
-                  },
-                },
-              },
-              0,
-            ],
-          },
-
-          event: {
-            _id: "$eventDetails._id",
-            title: "$eventDetails.title",
-            eventDate: "$eventDetails.eventDate",
-          },
-        },
-      },
-
-      // 5. Sort by creation date
-      { $sort: { createdAt: -1 } },
-    ]);
-
-    res.status(200).json({
-      status: "success",
-      results: transactions.length,
-      data: {
-        transactions,
       },
     });
   } catch (error) {
@@ -822,7 +714,7 @@ const handleAllTickets = async (req, res, next) => {
           event: {
             _id: "$eventDetails._id",
             title: "$eventDetails.title",
-            eventDate: "$eventDetails.eventDate",
+            eventDate: "$eventDetails.startDate",
             location: "$eventDetails.address",
             category: "$eventDetails.category",
             eventStart: "$eventDetails.startTime",
