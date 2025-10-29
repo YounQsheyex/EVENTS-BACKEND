@@ -1,9 +1,13 @@
 const EVENTS = require("../models/eventsSchemaa");
 const cloudinary = require("cloudinary").v2;
+const {
+  combineDateAndTime,
+  parseFlexibleTimeTo24,
+} = require("../helpers/combineDateandTime");
 
-// creating of events
+// Creating events
 const createEvents = async (req, res) => {
-  const {
+  let {
     title,
     description,
     category,
@@ -34,48 +38,53 @@ const createEvents = async (req, res) => {
   ) {
     return res.status(400).json({ message: "Please fill all fields" });
   }
+
   try {
-    // Prevent past date/time creation
+    // Convert times to 24-hour format FIRST
+    startTime = parseFlexibleTimeTo24(startTime);
+    endTime = parseFlexibleTimeTo24(endTime);
+
+    // Validate time format
+    if (!startTime || !endTime) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid time format. Use HH:MM or HH:MM AM/PM format.",
+      });
+    }
+
     const now = new Date();
-    const eventStart = new Date(startDate);
-    const eventEnd = new Date(endDate);
 
-    // If the event starts today, check that the start time is not in the past
-    if (eventStart.toDateString() === now.toDateString()) {
-      const [startHour, startMinute] = startTime.split(":").map(Number);
-      const eventStartTime = new Date(eventStart);
-      eventStartTime.setHours(startHour, startMinute, 0, 0);
+    // Combine date and time for accurate validation
+    const eventStartDateTime = combineDateAndTime(
+      new Date(startDate),
+      startTime
+    );
+    const eventEndDateTime = combineDateAndTime(new Date(endDate), endTime);
 
-      if (eventStartTime < now) {
-        return res.status(400).json({
-          success: false,
-          message: "Start time cannot be in the past.",
-        });
-      }
-    }
-
-    // General date validation
-    if (eventStart < now) {
+    // 1. Validate start date/time is not in the past
+    if (eventStartDateTime < now) {
       return res.status(400).json({
         success: false,
-        message: "Start date cannot be in the past.",
+        message: "Event start date and time cannot be in the past.",
       });
     }
 
-    if (eventEnd < eventStart) {
+    // 2. Validate end date/time is after start date/time
+    if (eventEndDateTime <= eventStartDateTime) {
       return res.status(400).json({
         success: false,
-        message: "End date cannot be before start date.",
+        message: "Event end date and time must be after start date and time.",
       });
     }
 
+    // Check admin permissions
     if (!["admin", "superAdmin"].includes(req.user.role)) {
       return res
         .status(403)
         .json({ message: "Access denied. Only admins can create events." });
     }
 
-    //  Strict duplicate check — must match ALL three fields
+    // Strict duplicate check
     const duplicateEvent = await EVENTS.findOne({
       $and: [{ address }, { startDate }, { startTime }],
     });
@@ -88,7 +97,7 @@ const createEvents = async (req, res) => {
       });
     }
 
-    //  handle images upload
+    // Handle image upload
     let uploadedImage = "";
     if (req.files && req.files.image) {
       const file = req.files.image;
@@ -99,7 +108,7 @@ const createEvents = async (req, res) => {
       uploadedImage = result.secure_url;
     }
 
-    //  Parse tickets properly (in case sent as stringified JSON)
+    // Parse tickets properly
     let parsedTickets;
     try {
       parsedTickets =
@@ -126,14 +135,15 @@ const createEvents = async (req, res) => {
           .json({ message: `Invalid ticket name: ${ticket.name}` });
       }
     }
+
     // Normalize ticket data
     for (const ticket of parsedTickets) {
       if (ticket.type === "free") {
-        ticket.price = 0; //  enforce free ticket price
+        ticket.price = 0;
       }
     }
 
-    // create property on the db
+    // Create event
     const newEvent = new EVENTS({
       title,
       description,
@@ -142,12 +152,12 @@ const createEvents = async (req, res) => {
       perks,
       startDate,
       endDate,
-      startTime,
-      endTime,
+      startTime, // Already in 24-hour format
+      endTime, // Already in 24-hour format
       address,
       image: uploadedImage,
       tickets: parsedTickets,
-      status: status || "drafts",
+      status: status || "draft",
       createdBy: req.user._id,
     });
 
@@ -220,47 +230,13 @@ const getSingleEvent = async (req, res) => {
   }
 };
 
-// update events
+// Update events
 const updateEvent = async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    let updates = req.body;
 
-    // Prevent past date/time creation
-    const now = new Date();
-    const eventStart = new Date(startDate);
-    const eventEnd = new Date(endDate);
-
-    // If the event starts today, check that the start time is not in the past
-    if (eventStart.toDateString() === now.toDateString()) {
-      const [startHour, startMinute] = startTime.split(":").map(Number);
-      const eventStartTime = new Date(eventStart);
-      eventStartTime.setHours(startHour, startMinute, 0, 0);
-
-      if (eventStartTime < now) {
-        return res.status(400).json({
-          success: false,
-          message: "Start time cannot be in the past.",
-        });
-      }
-    }
-
-    // General date validation
-    if (eventStart < now) {
-      return res.status(400).json({
-        success: false,
-        message: "Start date cannot be in the past.",
-      });
-    }
-
-    if (eventEnd < eventStart) {
-      return res.status(400).json({
-        success: false,
-        message: "End date cannot be before start date.",
-      });
-    }
-
-    //  Only admins or superAdmins can update
+    // Only admins or superAdmins can update
     if (!["admin", "superAdmin"].includes(req.user.role)) {
       return res.status(403).json({
         success: false,
@@ -268,7 +244,7 @@ const updateEvent = async (req, res) => {
       });
     }
 
-    //  Find the existing event
+    // Find the existing event
     const event = await EVENTS.findById(id);
     if (!event) {
       return res.status(404).json({
@@ -277,11 +253,66 @@ const updateEvent = async (req, res) => {
       });
     }
 
-    //  Handle new image upload (if provided)
+    // Convert times to 24-hour format if provided
+    if (updates.startTime) {
+      updates.startTime = parseFlexibleTimeTo24(updates.startTime);
+      if (!updates.startTime) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid start time format. Use HH:MM or HH:MM AM/PM format.",
+        });
+      }
+    }
+
+    if (updates.endTime) {
+      updates.endTime = parseFlexibleTimeTo24(updates.endTime);
+      if (!updates.endTime) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid end time format. Use HH:MM or HH:MM AM/PM format.",
+        });
+      }
+    }
+
+    // Get final values (use updates if provided, otherwise keep existing)
+    const finalStartDate = updates.startDate
+      ? new Date(updates.startDate)
+      : event.startDate;
+    const finalEndDate = updates.endDate
+      ? new Date(updates.endDate)
+      : event.endDate;
+    const finalStartTime = updates.startTime || event.startTime;
+    const finalEndTime = updates.endTime || event.endTime;
+
+    const now = new Date();
+
+    // Combine date and time for accurate validation
+    const eventStartDateTime = combineDateAndTime(
+      finalStartDate,
+      finalStartTime
+    );
+    const eventEndDateTime = combineDateAndTime(finalEndDate, finalEndTime);
+
+    // 1. Validate start date/time is not in the past
+    if (eventStartDateTime < now) {
+      return res.status(400).json({
+        success: false,
+        message: "Event start date and time cannot be in the past.",
+      });
+    }
+
+    // 2. Validate end date/time is after start date/time
+    if (eventEndDateTime <= eventStartDateTime) {
+      return res.status(400).json({
+        success: false,
+        message: "Event end date and time must be after start date and time.",
+      });
+    }
+
+    // Handle new image upload (if provided)
     if (req.files && req.files.image) {
       const file = req.files.image;
-
-      // Upload new image
       const result = await cloudinary.uploader.upload(file.tempFilePath, {
         folder: "Eventra",
         use_filename: true,
@@ -289,7 +320,7 @@ const updateEvent = async (req, res) => {
       updates.image = result.secure_url;
     }
 
-    //  Parse tickets properly
+    // Parse tickets properly
     if (updates.tickets) {
       try {
         updates.tickets =
@@ -316,7 +347,7 @@ const updateEvent = async (req, res) => {
       }
     }
 
-    //  Duplicate check (exclude current event)
+    // Duplicate check (exclude current event)
     if (updates.address || updates.startDate || updates.startTime) {
       const duplicateEvent = await EVENTS.findOne({
         _id: { $ne: id },
@@ -333,16 +364,17 @@ const updateEvent = async (req, res) => {
         });
       }
     }
-    // Add updatedBy before saving
-    event.updatedBy = req.user._id;
 
-    //  Apply updates
+    // Add updatedBy before saving
+    updates.updatedBy = req.user._id;
+
+    // Apply updates
     Object.assign(event, updates);
     await event.save();
 
     const populatedEvent = await EVENTS.findById(id)
-      .populate("createdBy", "firstname lastname  role")
-      .populate("updatedBy", "firstname lastname  role");
+      .populate("createdBy", "firstname lastname role")
+      .populate("updatedBy", "firstname lastname role");
 
     res.status(200).json({
       success: true,
