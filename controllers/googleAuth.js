@@ -12,6 +12,8 @@ const googleCallback = async (req, res) => {
   try {
     const { googleId, firstname, lastname, emails } = req.user;
 
+
+
     // Create temporary token valid for 30 minutes
     const tempToken = jwt.sign(
       { googleId, firstname, lastname, emails },
@@ -23,7 +25,7 @@ const googleCallback = async (req, res) => {
       // Only one email: skip "choose email" step
       const chosenEmail = emails[0];
       return res.redirect(
-        `http://localhost:5173/finalize-google?token=${tempToken}&chosenEmail=${encodeURIComponent(
+        `${process.env.FRONTEND_URL}/finalize-google?token=${tempToken}&chosenEmail=${encodeURIComponent(
           chosenEmail
         )}`
       );
@@ -31,7 +33,7 @@ const googleCallback = async (req, res) => {
 
     // Multiple emails: frontend will ask user to choose one
     return res.redirect(
-      `http://localhost:5173/choose-email?token=${tempToken}&emails=${encodeURIComponent(
+      `${process.env.FRONTEND_URL}/choose-email?token=${tempToken}&emails=${encodeURIComponent(
         JSON.stringify(emails)
       )}`
     );
