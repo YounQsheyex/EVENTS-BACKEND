@@ -124,8 +124,8 @@ app.use(errorMiddleware);
 
 const startServer = async () => {
   try {
-    server.listen(8080, () => {
-      console.log("Listening on http://localhost:8080");
+    server.listen(PORT, () => {
+      console.log(`Listening on PORT ${PORT}`);
     });
     redisConfig.flushall("ASYNC");
     await mongoose.connect(process.env.MONGO_URL, { dbName: "EVENTS-DB" });
