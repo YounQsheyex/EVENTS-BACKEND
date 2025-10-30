@@ -67,7 +67,9 @@ const getAllNotifications = async (req, res, next) => {
 
 const getAllUnreadNotifications = async (req, res, next) => {
   try {
-    const unreadNotifications = await Notification.find({ unread: true });
+    const unreadNotifications = await Notification.find({
+      views: { $ne: req.user._id },
+    });
 
     if (!unreadNotifications.length)
       return res.status(404).json({
@@ -128,6 +130,24 @@ const markAsRead = async (req, res, next) => {
   }
 };
 
+const markAllAsRead = async (req, res, next) => {
+  try {
+    await Notification.updateMany(
+      { views: { $ne: req.user._id } },
+      { $push: { views: req.user._id } }
+    );
+
+    await redisConfig.flushall("ASYNC");
+
+    res.status(200).json({
+      success: true,
+      message: "All notifications marked as read successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const deleteNotification = async (req, res, next) => {
   try {
     if (!req.params.id)
@@ -162,6 +182,7 @@ const deleteNotification = async (req, res, next) => {
 module.exports = {
   makeMessage,
   markAsRead,
+  markAllAsRead,
   getAllNotifications,
   getAllUnreadNotifications,
   deleteNotification,
