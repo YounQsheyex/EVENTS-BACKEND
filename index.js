@@ -1,10 +1,10 @@
 require("dotenv").config();
 const express = require("express");
-const http = require("http");
+// const http = require("http");
 const app = express();
-const server = http.createServer(app);
-const { init } = require("./helpers/socketio.js"); // import your socket module
-const io = init(server); // initialize socket.io
+// const server = http.createServer(app);
+// const { init } = require("./helpers/socketio.js"); // import your socket module
+// const io = init(server); // initialize socket.io
 const cors = require("cors");
 const mongoose = require("mongoose");
 const fileupload = require("express-fileupload");
@@ -30,30 +30,30 @@ const webhookRoutes = require("./routes/webhookRoute");
 const notificationRoutes = require("./routes/notificationRoutes");
 
 // Import Error middleware to handle errors throughout the API.
-const errorMiddleware = require("./middleware/error");
+// const errorMiddleware = require("./middleware/error");
 // Import arcjet middleware to handle rate limiting throughout the API.
-const arcjetMiddleware = require("./middleware/arjectMiddleware");
-const redisConfig = require("./helpers/redis");
-const socketAuth = require("./middleware/socketMiddleware.js");
-const { isUser } = require("./middleware/auth.js");
+// const arcjetMiddleware = require("./middleware/arjectMiddleware");
+// const redisConfig = require("./helpers/redis");
+// const socketAuth = require("./middleware/socketMiddleware.js");
+// const { isUser } = require("./middleware/auth.js");
 
 // middleware
 app.use(express.json());
 app.use(cors());
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "secret",
-    resave: false,
-    saveUninitialized: false,
-  })
-);
+// app.use(
+//   session({
+//     secret: process.env.SESSION_SECRET || "secret",
+//     resave: false,
+//     saveUninitialized: false,
+//   }),
+// );
 
 app.use(passport.initialize());
 app.use(
   fileupload({
     useTempFiles: true,
     limits: { fileSize: 10 * 1024 * 1024 },
-  })
+  }),
 );
 
 // Configuration for Cloudinary
@@ -64,7 +64,7 @@ cloudinary.config({
 });
 
 // Arcjet rate limiter to prevent users from spamming the server by allowing a limited number of requests to be made by a user within a given time
-app.use(arcjetMiddleware);
+// app.use(arcjetMiddleware);
 
 // ROUTES
 app.get("/", (req, res) => {
@@ -84,52 +84,52 @@ app.use("/api/testimonials", testimonialRoutes);
 app.use("/api/contact", contactRoutes);
 
 // Middleware: runs before each socket connection
-io.use(socketAuth(isUser));
+// io.use(socketAuth(isUser));
 
-io.on("connection", (socket) => {
-  socket.emit("connected", socket.user);
-  console.log(`User connected: ${socket.id} (${socket.user.firstname})`);
+// io.on("connection", (socket) => {
+//   socket.emit("connected", socket.user);
+//   console.log(`User connected: ${socket.id} (${socket.user.firstname})`);
 
-  socket.on("joinRoom", (room) => {
-    console.log("room: ", room);
-    if (room !== "admin") {
-      const err = new Error(
-        `Dear ${socket.user.firstname}, You are not allowed to join this room`
-      );
-      socket.emit("error", err.message); // trigger the error event
-      return;
-    }
+//   socket.on("joinRoom", (room) => {
+//     console.log("room: ", room);
+//     if (room !== "admin") {
+//       const err = new Error(
+//         `Dear ${socket.user.firstname}, You are not allowed to join this room`,
+//       );
+//       socket.emit("error", err.message); // trigger the error event
+//       return;
+//     }
 
-    socket.join(room);
-    io.to(room).emit("joinRoom", `${socket.user.firstname} joined ${room}`);
-  });
+//     socket.join(room);
+//     io.to(room).emit("joinRoom", `${socket.user.firstname} joined ${room}`);
+//   });
 
-  socket.on("roomMessage", ({ room, obj }) => {
-    console.log("obj: ", obj);
-    io.to(room).emit("roomMessage", {
-      user: socket.user.firstname,
-      ...obj,
-    });
-  });
+//   socket.on("roomMessage", ({ room, obj }) => {
+//     console.log("obj: ", obj);
+//     io.to(room).emit("roomMessage", {
+//       user: socket.user.firstname,
+//       ...obj,
+//     });
+//   });
 
-  socket.on("disconnect", () => {
-    console.log(`${socket.user.firstname} disconnected`);
-  });
-});
+//   socket.on("disconnect", () => {
+//     console.log(`${socket.user.firstname} disconnected`);
+//   });
+// });
 
 // error routes
 app.use("/", (req, res) => {
   res.status(404).json({ success: false, message: "ROUTE NOT FOUND" });
 });
 
-app.use(errorMiddleware);
+// app.use(errorMiddleware);
 
 const startServer = async () => {
   try {
-    server.listen(8080, () => {
-      console.log("Listening on http://localhost:8080");
-    });
-    redisConfig.flushall("ASYNC");
+    // server.listen(8080, () => {
+    //   console.log("Listening on http://localhost:8080");
+    // });
+    // redisConfig.flushall("ASYNC");
     await mongoose.connect(process.env.MONGO_URL, { dbName: "EVENTS-DB" });
     app.listen(PORT, () => {
       console.log(`App Running on PORT ${PORT}`);
