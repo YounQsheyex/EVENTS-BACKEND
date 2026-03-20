@@ -1,5 +1,5 @@
-// // socket.js
-// let io;
+// socket.js;
+let io;
 
 const allowedOrigins = [
   process.env.FRONTEND_URL,
