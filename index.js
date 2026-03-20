@@ -90,27 +90,25 @@ app.use("/api/contact", contactRoutes);
 //   socket.emit("connected", socket.user);
 //   console.log(`User connected: ${socket.id} (${socket.user.firstname})`);
 
-//   socket.on("joinRoom", (room) => {
-//     console.log("room: ", room);
-//     if (room !== "admin") {
-//       const err = new Error(
-//         `Dear ${socket.user.firstname}, You are not allowed to join this room`,
-//       );
-//       socket.emit("error", err.message); // trigger the error event
-//       return;
-//     }
+  socket.on("adminRoom", (room) => {
+    if (room !== "admin") {
+      const err = new Error(
+        `Dear ${socket.user.firstname}, You are not allowed to join this chat room.`
+      );
+      socket.emit("error", err.message); // trigger the error event
+      return;
+    }
 
-//     socket.join(room);
-//     io.to(room).emit("joinRoom", `${socket.user.firstname} joined ${room}`);
-//   });
+    socket.join(room);
+    io.to(room).emit("adminRoom", `${socket.user.firstname} joined ${room}`);
+  });
 
-//   socket.on("roomMessage", ({ room, obj }) => {
-//     console.log("obj: ", obj);
-//     io.to(room).emit("roomMessage", {
-//       user: socket.user.firstname,
-//       ...obj,
-//     });
-//   });
+  socket.on("adminMessage", ({ room, obj }) => {
+    io.to(room).emit("adminMessage", {
+      user: socket.user.firstname,
+      ...obj,
+    });
+  });
 
 //   socket.on("disconnect", () => {
 //     console.log(`${socket.user.firstname} disconnected`);
@@ -126,10 +124,10 @@ app.use("/", (req, res) => {
 
 const startServer = async () => {
   try {
-    // server.listen(8080, () => {
-    //   console.log("Listening on http://localhost:8080");
-    // });
-    // redisConfig.flushall("ASYNC");
+    server.listen(PORT, () => {
+      console.log(`Listening on PORT ${PORT}`);
+    });
+    redisConfig.flushall("ASYNC");
     await mongoose.connect(process.env.MONGO_URL, { dbName: "EVENTS-DB" });
     app.listen(PORT, () => {
       console.log(`App Running on PORT ${PORT}`);
