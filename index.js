@@ -1,6 +1,6 @@
 require("dotenv").config();
 const express = require("express");
-// const http = require("http");
+const http = require("http");
 const app = express();
 const server = http.createServer(app);
 const { init } = require("./helpers/socketio.js"); // import your socket module
