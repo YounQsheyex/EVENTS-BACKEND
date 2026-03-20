@@ -4,6 +4,7 @@ const {
   combineDateAndTime,
   parseFlexibleTimeTo24,
 } = require("../helpers/combineDateandTime");
+const { makeMessage } = require("./notifications");
 
 // Creating events
 const createEvents = async (req, res) => {
@@ -163,6 +164,17 @@ const createEvents = async (req, res) => {
 
     try {
       await newEvent.save();
+      await makeMessage({
+        title:
+          endTime < new Date()
+            ? "Event Completed"
+            : `New Event ${newEvent.status === "live" ? "Created" : "Drafted"}`,
+        content:
+          endTime < new Date()
+            ? `The event "${newEvent.title}" has been completed with ${newEvent.tickets.length} tickets sold.`
+            : `The event "${newEvent.title}" has been created by ${req.user.firstname} ${req.user.lastname}.`,
+        about: newEvent.title,
+      });
       res.status(201).json({
         success: true,
         message: "Event created successfully",
@@ -371,6 +383,11 @@ const updateEvent = async (req, res) => {
     // Apply updates
     Object.assign(event, updates);
     await event.save();
+    await makeMessage({
+      title: "Event Updated",
+      content: `The event "${event.title}" has been updated by ${req.user.firstname} ${req.user.lastname}.`,
+      about: event.title,
+    });
 
     const populatedEvent = await EVENTS.findById(id)
       .populate("createdBy", "firstname lastname role")
@@ -412,6 +429,12 @@ const deleteEvent = async (req, res, next) => {
         success: false,
         message: "Event not found!",
       });
+
+    await makeMessage({
+      title: "Event Deleted",
+      content: `The event "${event.title}" has been deleted by ${req.user.firstname} ${req.user.lastname}.`,
+      about: event.title,
+    });
 
     res
       .status(200)

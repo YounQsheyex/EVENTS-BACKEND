@@ -12,6 +12,7 @@ const {
 } = require("../emails/sendemails");
 const { generateTicketInstances } = require("../helpers/ticketInstance");
 const redirectToFrontend = require("../helpers/redirect");
+const { makeMessage } = require("./notifications");
 
 const baseUrl = process.env.BACKEND_URL.replace(/\/$/, "");
 
@@ -323,6 +324,11 @@ const handlePaymentVerification = async (req, res, next) => {
       });
 
       await Promise.all([confirmationEmailPromise, ticketEmailPromise]);
+      await makeMessage({
+        title: "New Ticket Purchase",
+        content: `${user.firstname} ${user.lastname} purchased ${purchasedQuantity} x ${specificTicket.name} tickets for the event "${event.title}".`,
+        about: event.title,
+      });
     } catch (emailError) {
       // return redirectToFrontend(res, finalStatus, reference);
       console.error("One or more customer emails failed to send:", emailError);
@@ -560,7 +566,7 @@ const handleUserTicket = async (req, res, next) => {
             title: "$eventDetails.title",
             eventDate: "$eventDetails.startDate",
             location: "$eventDetails.address", // ⬅️ NOTE: Using 'address' from EventSchema
-            category: "$eventDetails.category",
+            // category: "$eventDetails.category",
             eventStart: "$eventDetails.startTime", // ⬅️ NOTE: Using 'startTime'
             eventEnd: "$eventDetails.endTime", // ⬅️ NOTE: Using 'endTime'
             eventImage: "$eventDetails.image", // ⬅️ NOTE: Using 'image'
@@ -576,11 +582,11 @@ const handleUserTicket = async (req, res, next) => {
 
           // Payment Fields
           payment: {
-            quantity: "$paymentDetails.quantity",
+            // quantity: "$paymentDetails.quantity",
             amount: "$paymentDetails.amount",
             reference: "$paymentDetails.reference",
-            paidAt: "$paymentDetails.paidAt",
-            email: "$paymentDetails.email", // Include email if needed
+            // paidAt: "$paymentDetails.paidAt",
+            // email: "$paymentDetails.email", // Include email if needed
             // NOTE: Ensure the keys match the fields in your payment schema
           },
         },
@@ -783,16 +789,18 @@ const getSalesOverview = async (req, res, next) => {
       revenueResult.length > 0 ? revenueResult[0].totalRevenue : 0;
 
     // --- 2. Aggregate Total Tickets Sold (Last 30 Days) ---
-    const ticketsResult = await ticketInstanceSchema.aggregate([
+    const ticketsResult = await paymentSchema.aggregate([
       {
         $match: {
+          status: "success",
           createdAt: { $gte: thirtyDaysAgo }, // Filter by date (last 30 days)
         },
       },
       {
         $group: {
           _id: null,
-          totalTicketsSold: { $sum: 1 }, // Simply counts every document
+          // Sum the quantity field from successful payments
+          totalTicketsSold: { $sum: "$quantity" },
         },
       },
     ]);
@@ -801,6 +809,7 @@ const getSalesOverview = async (req, res, next) => {
       ticketsResult.length > 0 ? ticketsResult[0].totalTicketsSold : 0;
 
     // --- 3. Aggregate Total Tickets Used (Last 30 Days) ---
+    // NOTE: We use the ticketInstanceSchema here as this reflects usage status
     const usedTicketsResult = await ticketInstanceSchema.aggregate([
       {
         $match: {
@@ -819,12 +828,107 @@ const getSalesOverview = async (req, res, next) => {
     const totalTicketsUsed =
       usedTicketsResult.length > 0 ? usedTicketsResult[0].totalTicketsUsed : 0;
 
+    // --- 4. Aggregate Total Tickets Created PER EVENT (Inventory Summary) ---
+    // Calculates the total inventory (quantityAvailable) for all ticket types for each event.
+    const eventInventorySummary = await EVENTS.aggregate([
+      // 4a. Unwind the tickets array to process each ticket subdocument individually
+      { $unwind: "$tickets" },
+
+      // 4b. Group by Event ID and sum the quantityAvailable
+      {
+        $group: {
+          _id: "$_id", // Group by Event ID
+          totalTicketsCreated: { $sum: "$tickets.quantityAvailable" },
+        },
+      },
+
+      // 4c. Project the necessary fields for merging
+      {
+        $project: {
+          eventId: "$_id",
+          totalTicketsCreated: 1,
+          _id: 0,
+        },
+      },
+    ]);
+
+    // Convert to a Map for fast lookup during the merging step
+    const inventoryMap = eventInventorySummary.reduce((map, item) => {
+      map.set(item.eventId.toString(), item.totalTicketsCreated);
+      return map;
+    }, new Map());
+
+    // --- 5. Aggregate Sales Breakdown by Event (Last 30 Days) ---
+    const eventSalesSummary = await paymentSchema.aggregate([
+      // 5a. Filter successful payments in the last 30 days
+      {
+        $match: {
+          status: "success",
+          createdAt: { $gte: thirtyDaysAgo },
+        },
+      },
+
+      // 5b. Group by Event ID and sum key metrics
+      {
+        $group: {
+          _id: "$event", // Group payments by the event field
+          eventTotalRevenue: { $sum: "$amount" },
+          eventTicketsSold: { $sum: "$quantity" },
+        },
+      },
+
+      // 5c. Lookup Event Details (Title, Date)
+      {
+        $lookup: {
+          from: "eventras", // Event collection name
+          localField: "_id",
+          foreignField: "_id",
+          as: "eventDetails",
+        },
+      },
+
+      // 5d. Deconstruct the eventDetails array
+      {
+        $unwind: "$eventDetails",
+      },
+
+      // 5e. Final Projection
+      {
+        $project: {
+          _id: 0, // Exclude the raw Event ID
+          eventId: "$_id",
+          eventTitle: "$eventDetails.title",
+          eventDate: "$eventDetails.startDate",
+          ticketsSold: "$eventTicketsSold",
+          revenue: "$eventTotalRevenue",
+        },
+      },
+    ]);
+
+    // --- 6. Combine Sales and Inventory Data ---
+    // Merge the per-event sales data (Step 5) with the per-event inventory data (Step 4)
+    const finalEventSummary = eventSalesSummary.map((salesItem) => {
+      const eventIdStr = salesItem.eventId.toString();
+      // Look up total created tickets from the map, defaulting to 0 if not found
+      const totalCreated = inventoryMap.get(eventIdStr) || 0;
+
+      return {
+        ...salesItem,
+        totalTicketsCreated: totalCreated, // NEW: Total inventory created for this event
+        ticketsRemaining: totalCreated - salesItem.ticketsSold, // DERIVED: Inventory minus sales
+      };
+    });
+
     res.status(200).json({
       status: "success",
       data: {
+        // Overall Aggregates (Global)
         totalRevenue: totalRevenue,
         totalTicketsSold: totalTicketsSold,
-        totalTicketsUsed: totalTicketsUsed, // Useful extra metric
+        totalTicketsUsed: totalTicketsUsed,
+
+        // Event-Specific Breakdown (Includes Inventory/Tickets Created)
+        eventSalesSummary: finalEventSummary,
       },
     });
   } catch (error) {
